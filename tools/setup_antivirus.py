@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.antivirus import Antivirus
 from app.core import DATA, Store, file_path
 from app.windows import secure_data_folder
+from launch import instance
 
 
 def main():
@@ -14,6 +15,8 @@ def main():
     parser.add_argument('--archive', type=Path, help='Already downloaded official ZIP; its pinned hash is still required.')
     parser.add_argument('--skip-update', action='store_true', help='Install only; scanning stays unavailable until definitions are installed.')
     args = parser.parse_args()
+    if instance() is not None:
+        raise SystemExit('Quit the local console before CLI setup, or use its Antivirus setup controls. Active scan snapshots must not be interrupted.')
     DATA.mkdir(parents=True, exist_ok=True)
     file_path(str(DATA), directory=True)
     secure_data_folder(DATA)

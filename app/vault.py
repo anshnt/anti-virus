@@ -185,7 +185,10 @@ class Vault:
             raise ValueError('Vault integrity verification failed; recovery blocked.')
         # Never overwrite an original or silently put a detected executable back
         # into circulation. The user must review/rename this recovered copy.
-        destination = self.recovery / (vault_id + '-' + Path(entry['path']).name + '.restored')
+        # Bound the output component even when the original is a long NTFS name.
+        # The ledger retains the complete original path and content hash.
+        display_name = Path(entry['path']).name[:100]
+        destination = self.recovery / (vault_id + '-' + display_name + '.restored')
         with destination.open('xb') as output:
             output.write(content)
             output.flush()

@@ -120,6 +120,20 @@ class AntivirusTests(unittest.TestCase):
         Store(self.store.folder)
         self.assertEqual(self.store.rows('SELECT status FROM jobs')[0]['status'], 'running')
 
+    def test_second_engine_client_preserves_active_snapshots(self):
+        snapshot, _ = self.av._snapshot(self.sample)
+        Antivirus(self.store)
+        self.assertTrue(snapshot.exists())
+        self.av.cleanup_staging()
+        self.assertFalse(snapshot.exists())
+
+    def test_standalone_setup_refuses_a_running_console(self):
+        from tools import setup_antivirus
+        with patch('tools.setup_antivirus.instance', return_value={'pid': 1}), patch('sys.argv', ['setup_antivirus.py']), patch('tools.setup_antivirus.Antivirus') as create:
+            with self.assertRaises(SystemExit):
+                setup_antivirus.main()
+        create.assert_not_called()
+
 
 @unittest.skipUnless(os.name == 'nt', 'Windows DPAPI and file-handle behavior')
 class VaultTests(unittest.TestCase):
@@ -155,6 +169,17 @@ class VaultTests(unittest.TestCase):
         self.assertEqual(recovered.read_bytes(), self.content)
         self.assertEqual(recovered.suffix, '.restored')
         self.assertEqual(self.source.read_bytes(), b'New user file at the original location')
+
+    def test_long_original_name_has_bounded_recovery_name(self):
+        self.source.unlink()
+        self.source = self.root / ('a' * 160 + '.txt')
+        self.source.write_bytes(self.content)
+        with self.store.connect() as c:
+            c.execute('UPDATE detections SET path=?', (str(self.source),))
+        vault_id = self.vault.quarantine(self.detection)
+        recovered = Path(self.vault.recover(vault_id))
+        self.assertLessEqual(len(recovered.name), 142)
+        self.assertEqual(recovered.read_bytes(), self.content)
 
     def test_changed_source_blocks_removal(self):
         self.source.write_text('Different benign contents')

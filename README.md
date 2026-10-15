@@ -59,7 +59,7 @@ py -3 tools/setup_antivirus.py
 py -3 tools/validate_independent.py --live
 ```
 
-Node.js is needed only for the JavaScript syntax check. `setup_antivirus.py` is an alternative to the UI setup. The opt-in live validation uses harmless files and an isolated synthetic test signature; it does not download malware or modify production databases. Windows CI runs benign regressions and syntax/package checks without downloading the engine or real malware. Source packaging excludes runtime data and vendor binaries. The downloaded runtime includes ClamAV's license files; see its upstream project for licensing.
+Node.js is needed only for the JavaScript syntax check. `setup_antivirus.py` is an alternative to UI setup and requires the console to be stopped first; it refuses to interrupt a running instance. The opt-in live validation uses harmless files and an isolated synthetic test signature; it does not download malware or modify production databases. Windows CI runs benign regressions and syntax/package checks without downloading the engine or real malware. Source packaging excludes runtime data and vendor binaries. The downloaded runtime includes ClamAV's license files; see its upstream project for licensing.
 
 See [VALIDATION.md](VALIDATION.md) for performed checks and their limits, and [CONTRIBUTING.md](CONTRIBUTING.md) for development guidance. When working from multiple source checkouts, quit the running console before testing another checkout; they share the per-user data directory.
 

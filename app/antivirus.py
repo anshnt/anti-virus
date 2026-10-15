@@ -75,8 +75,12 @@ class Antivirus:
             ''')
         self.root.mkdir(exist_ok=True)
         self.staging.mkdir(exist_ok=True)
+
+    def cleanup_staging(self):
         # Files left by a forced stop are never treated as completed results.
-        for path in self.staging.glob('*.scan'):
+        # Only the single-instance owner calls this on startup. Opening a second
+        # library/installer client must not remove an active scanner's snapshots.
+        for path in [*self.staging.glob('*.scan'), *self.staging.glob('*.list')]:
             try:
                 if path.is_file() and not path.is_symlink():
                     path.unlink()

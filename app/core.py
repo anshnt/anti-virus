@@ -171,6 +171,7 @@ class Engine:
         from .antivirus import Antivirus
         from .vault import Vault
         self.antivirus = Antivirus(self.store)
+        self.antivirus.cleanup_staging()
         self.vault = Vault(self.store)
         self.pending_downloads = {}
         self.store.log('Console started', 'Local monitoring runs while this app is open. Defender protection runs independently.')
