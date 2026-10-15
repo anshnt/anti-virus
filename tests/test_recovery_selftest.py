@@ -159,6 +159,21 @@ class SelfTestBoundaryTests(unittest.TestCase):
 
     @unittest.skipUnless(os.name == 'nt', 'Windows DPAPI')
     def test_diagnostic_isolates_signatures_findings_vault_and_removes_fixtures(self):
+        self.diagnostic_with_mock_engine()
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows path aliases')
+    def test_diagnostic_accepts_canonicalized_temporary_path(self):
+        original = tempfile.TemporaryDirectory
+        @contextmanager
+        def alias(*args, **kwargs):
+            with original(*args, **kwargs) as folder:
+                # NTFS case aliases reproduce the canonical/original mismatch
+                # without depending on whether a volume enables 8.3 names.
+                yield folder.swapcase()
+        with patch('app.selftest.tempfile.TemporaryDirectory', side_effect=alias):
+            self.diagnostic_with_mock_engine()
+
+    def diagnostic_with_mock_engine(self):
         workspaces = []
         def run(scanner, args, callback, cancellable=False):
             listing = Path(next(a.split('=', 1)[1] for a in args if a.startswith('--file-list=')))
