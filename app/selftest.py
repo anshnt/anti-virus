@@ -80,7 +80,10 @@ class SelfTest:
                 step('Synthetic detection + archive', '2 expected test matches: plain text and the same text inside a ZIP. These are not real threats.')
 
                 vault = Vault(store)
-                expected = {str(sample): MARKER, str(archive): archive.read_bytes()}
+                # Enumeration/quarantine resolve Windows short-name aliases.
+                # Match the same canonical identity, including on CI profiles
+                # whose TEMP path uses an 8.3 account-directory name.
+                expected = {str(sample.resolve()).casefold(): MARKER, str(archive.resolve()).casefold(): archive.read_bytes()}
                 entries = [vault.quarantine(d['id']) for d in detections]
                 if sample.exists() or archive.exists():
                     raise ValueError('The test source was not removed after encrypted quarantine.')
@@ -88,7 +91,7 @@ class SelfTest:
                 for entry in entries:
                     row = store.rows('SELECT * FROM vault WHERE id=?', (entry,))[0]
                     recovered = Path(vault.recover(entry))
-                    if recovered.suffix != '.restored' or recovered.read_bytes() != expected[row['path']]:
+                    if recovered.suffix != '.restored' or recovered.read_bytes() != expected[row['path'].casefold()]:
                         raise ValueError('The recovered test bytes do not match their original.')
                 step('Separate-copy recovery', 'Both recovered files match their originals byte for byte. Nothing was opened or executed.')
                 if self.installed.store.rows('SELECT id FROM detections WHERE signature LIKE ?', ('%' + TEST_NAME + '%',)):
