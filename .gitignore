@@ -1,0 +1,29 @@
+# Local Python artifacts
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Runtime security evidence and credentials must stay on the PC.
+.data/
+SentinelLocal/
+*.sqlite*
+instance.json
+instance.tmp
+runtime-errors.log
+*.log
+*.zip
+*security-report*.json
+*validation-results*.json
+.env
+.env.*
+
+# Editor and OS files
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+.DS_Store

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sentinel Local · PC Security</title><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%232ebf9f' d='M32 2 59 12 55 42 45 54 32 62 19 54 9 42 5 12Z'/%3E%3Ctext x='32' y='44' fill='%230c3535' font-family='sans-serif' font-size='36' font-weight='700' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E"><link rel="stylesheet" href="/app.css"><script src="/app.js" defer></script></head>
+<body>
+<aside class="sidebar">
+ <a class="brand" href="#overview"><span class="brand-mark">S</span><span>SENTINEL<small>LOCAL SECURITY</small></span></a>
+ <div class="nav-label">YOUR WORKSPACE</div>
+ <nav aria-label="Security tools">
+  <button data-view="overview" class="active"><span>◈</span> Overview</button>
+  <button data-view="scans"><span>◎</span> Scan Center</button>
+  <button data-view="files"><span>⌕</span> File Lab</button>
+  <button data-view="persistence"><span>⇢</span> Persistence</button>
+  <button data-view="network"><span>⌁</span> Network</button>
+  <button data-view="integrity"><span>◇</span> Integrity Watch</button>
+  <button data-view="activity"><span>≡</span> Activity</button>
+  <button data-view="settings"><span>⚙</span> Settings &amp; help</button>
+ </nav>
+ <div class="sidebar-bottom"><span class="status-dot"></span> PERSONAL · ON THIS PC<p>Powered by Microsoft Defender.<br>Evidence stays in your local console.</p><small id="version">v1.0.0</small></div>
+</aside>
+<div class="workspace">
+ <header><div><span class="eyebrow">WINDOWS SECURITY CONSOLE</span><p id="device">Connecting to this PC…</p></div><div class="header-actions"><span class="local-pill">● LOCAL ONLY</span><button id="refresh" class="quiet">↻ Refresh evidence</button></div></header>
+ <main>
+  <div id="connection" class="notice" role="status">Loading live Windows evidence. Initial checks can take a minute.</div>
+  <section id="view-overview" class="view">
+   <div class="page-heading"><div><span class="eyebrow">THE BIG PICTURE</span><h1>Your security, in focus.</h1><p>Windows protection and local review tools in one place.</p></div><a class="button quiet" href="/api/export" download>↓ Export report</a></div>
+   <div class="hero"><div class="shield" aria-hidden="true">S</div><div class="hero-copy"><span class="eyebrow">MICROSOFT DEFENDER</span><h2 id="protection-title">Checking protection…</h2><p id="protection-copy">Reading protection status from Windows.</p><div class="hero-actions"><button class="primary" data-job="quick">Run quick scan <span>↗</span></button><button class="glass" data-action="windows">Open Windows Security</button></div></div><div class="hero-side"><span class="pulse"></span><strong id="monitor-status">Starting monitor</strong><small id="monitor-time">Local change checks every 20 seconds</small></div></div>
+   <div class="metrics" id="metrics"></div>
+   <div class="two-col"><article class="panel"><div class="panel-heading"><h2>Protection layers</h2><span class="tag">LIVE EVIDENCE</span></div><div id="layers"></div><p class="footnote" id="checked-time"></p></article><article class="panel"><div class="panel-heading"><h2>Your next steps</h2><span class="tag amber">REVIEW</span></div><div id="next-steps"></div></article></div>
+   <article class="panel"><div class="panel-heading"><div><h2>Recent Defender scans</h2><p>Completion comes from Windows events, not a timestamp alone.</p></div><button class="text-button" data-go="scans">See all scan tools →</button></div><div id="recent-scans"></div></article>
+   <div class="scope-note">A completed scan or an empty detection history cannot prove that a PC is free of all malware. This console adds visibility; Defender supplies antivirus protection.</div>
+  </section>
+  <section id="view-scans" class="view" hidden>
+   <div class="page-heading"><div><span class="eyebrow">DETECTION ENGINE</span><h1>Scan Center</h1><p>Real Microsoft Defender scans, with verified completion evidence.</p></div><button class="quiet" data-job="update">↻ Update signatures</button></div>
+   <div class="three-col scan-options"><article class="panel"><span class="tool-icon">◎</span><h2>Quick scan</h2><p>Check common malware locations and active threats. A useful first check.</p><button class="primary" data-job="quick">Start quick scan</button></article><article class="panel"><span class="tool-icon">◉</span><h2>Full scan</h2><p>Scan the PC more thoroughly. May take hours. Keep the PC awake and on power.</p><button data-job="full">Start full scan</button></article><article class="panel"><span class="tool-icon">⌕</span><h2>Custom scan</h2><p>Scan an existing local file or folder. Links, network paths and cloud placeholders are skipped.</p><form id="custom-form"><label for="custom-path">Full Windows path</label><input id="custom-path" placeholder="C:\Users\YourName\Downloads\file.exe" required><button type="submit">Scan this path</button></form></article></div>
+   <div class="notice">Defender uses your existing protection and remediation settings. These scans may quarantine threats that Defender confirms. The console never deletes a file based on its own review indicators.</div>
+   <article class="panel"><div class="panel-heading"><h2>App scan &amp; action history</h2><span id="active-job" class="tag">IDLE</span></div><div id="jobs"></div></article>
+   <article class="panel"><div class="panel-heading"><h2>Defender scan event ledger</h2><span class="tag">LAST 14 DAYS · BOUNDED</span></div><div id="scan-ledger"></div></article>
+   <article class="panel"><div class="panel-heading"><h2>Recorded threat detections</h2><button class="text-button" data-action="windows">Open Protection History in Windows →</button></div><div id="threats"></div></article>
+  </section>
+  <section id="view-files" class="view" hidden>
+   <div class="page-heading"><div><span class="eyebrow">INSPECT BEFORE YOU OPEN</span><h1>File Lab</h1><p>Inspect a file without running it or uploading its contents.</p></div></div>
+   <article class="panel"><form id="inspect-form"><label for="inspect-path">Full local file path</label><div class="input-row"><input id="inspect-path" placeholder="C:\Users\YourName\Downloads\installer.exe" required><button class="primary" type="submit">Inspect file</button></div></form><p class="footnote">In File Explorer, right-click a file and choose “Copy as path”, then paste it here. Quoted paths are accepted.</p><div class="feature-strip"><span>SHA-256 fingerprint</span><span>Windows signature check</span><span>Script review indicators</span><span>Your local hash list</span></div><p class="footnote">256 MB hashing limit. Script patterns inspect the first 1 MB. Use a custom Defender scan for larger files or a malware detection verdict.</p></article>
+   <article class="panel"><div class="panel-heading"><h2>Inspection result</h2><span class="tag">STATIC ANALYSIS</span></div><div id="inspection" class="empty">Inspect a file to see its fingerprint, publisher and review indicators.</div></article>
+   <div class="notice">Signatures and script patterns are context. A signed file can still be harmful; unsigned files and administrative scripts can be legitimate. Hash matches refer to your own list, not a global threat database.</div>
+  </section>
+  <section id="view-persistence" class="view" hidden>
+   <div class="page-heading"><div><span class="eyebrow">WHAT STARTS &amp; STAYS RUNNING</span><h1>Persistence review</h1><p>Review startup entries and remote access tools. Changes appear in Activity.</p></div></div>
+   <article class="panel"><div class="panel-heading"><h2>Remote access</h2><span class="tag">YOUR PREFERENCES</span></div><div id="remote"></div></article>
+   <article class="panel"><div class="panel-heading"><h2>Windows startup entries</h2><span class="tag">REVIEW ONLY</span></div><p>Launch arguments are summarized to avoid exposing tokens. An unfamiliar entry deserves investigation, not automatic deletion.</p><div id="startup"></div></article>
+  </section>
+  <section id="view-network" class="view" hidden>
+   <div class="page-heading"><div><span class="eyebrow">CONNECTION VISIBILITY</span><h1>Network review</h1><p>See listening apps and established TCP connections from Windows.</p></div></div>
+   <div class="notice">“All interfaces” means an app is listening beyond loopback; firewall rules and router settings still determine reachability. An IP address or open port alone is not a malware verdict. UDP and traffic contents are outside this view.</div>
+   <article class="panel"><div class="panel-heading"><h2>Listening TCP ports</h2><span class="tag">CURRENT SNAPSHOT</span></div><div id="listeners"></div></article>
+   <article class="panel"><div class="panel-heading"><h2>Established connections</h2><span class="tag">UP TO 100</span></div><div id="connections"></div></article>
+  </section>
+  <section id="view-integrity" class="view" hidden>
+   <div class="page-heading"><div><span class="eyebrow">KNOW WHEN CONTENT CHANGES</span><h1>Integrity Watch</h1><p>Keep a local fingerprint of up to 16 important files, up to 64 MB each.</p></div></div>
+   <article class="panel"><form id="integrity-form"><label for="integrity-path">Full local path to a file you want to watch</label><div class="input-row"><input id="integrity-path" placeholder="C:\path\to\important-file" required><button class="primary" type="submit">Save baseline &amp; watch</button></div></form><p class="footnote">Checks every 20 seconds while the app runs. “Changed” means different content; it does not mean malware. To accept a known change, remove the watch and add a new baseline.</p></article>
+   <article class="panel"><div class="panel-heading"><h2>Watched files</h2><span class="tag">LOCAL SHA-256 BASELINES</span></div><div id="watched"></div></article>
+   <div class="scope-note">This is a user-level file change monitor. It cannot detect every brief change or resist an attacker with access to your Windows account.</div>
+  </section>
+  <section id="view-activity" class="view" hidden>
+   <div class="page-heading"><div><span class="eyebrow">YOUR LOCAL AUDIT TRAIL</span><h1>Activity</h1><p>Scans, settings, download review alerts and watched file changes.</p></div><select id="activity-filter" aria-label="Filter activity"><option value="all">All activity</option><option value="review">Needs review</option><option value="info">Information</option></select></div>
+   <article class="panel"><div id="activity-list"></div><p class="footnote">Showing the latest 150 entries. Up to 1,500 are retained locally. Routine changes are not confirmed threats.</p></article>
+  </section>
+  <section id="view-settings" class="view" hidden>
+   <div class="page-heading"><div><span class="eyebrow">BUILT FOR YOUR PC</span><h1>Settings &amp; help</h1><p>Keep the scope clear and the controls in your hands.</p></div></div>
+   <div class="two-col"><article class="panel"><h2>Local monitoring</h2><form id="settings-form"><label class="checkbox"><input type="checkbox" id="watch-downloads"> Alert on executable or script changes in Downloads</label><p class="footnote" id="download-folder"></p><p class="footnote">Default Downloads folder only, top level, up to 6,000 entries. Existing files form the initial baseline. Alerts are local and never automatically delete files.</p><label for="hashes">Your SHA-256 review list · optional</label><textarea id="hashes" rows="5" placeholder="One 64-character SHA-256 hash per line"></textarea><p class="footnote">Up to 200 hashes. A match is a review indicator against your list. No automatic blocking or quarantine.</p><button class="primary" type="submit">Save settings</button></form></article>
+   <article class="panel"><h2>What this app does</h2><ul class="help-list"><li>Uses the installed Microsoft Defender engine for scans and signature updates.</li><li>Reads security status, scan events, startup entries and TCP connections.</li><li>Checks local files for signatures, hashes and a small set of script patterns.</li><li>Monitors Downloads and selected file baselines while running.</li><li>Stores evidence on this PC. The console does not upload samples.</li></ul><h3>What it cannot promise</h3><p>No commercial certification, independent malware engine, kernel sensor, ransomware rollback or guarantee that all malware is detected. Defender’s existing Microsoft cloud and sample submission settings still apply.</p><p>Some Windows evidence needs administrator permissions. Missing checks are shown as unavailable. This app does not bypass Windows permissions.</p></article></div>
+   <article class="panel"><div class="panel-heading"><h2>Session &amp; data</h2><span class="tag">SINGLE USER · LOOPBACK</span></div><div id="session-info"></div><p>Use <strong>Start Sentinel Local.cmd</strong> to reopen your private browser session. Closing the tab leaves monitoring and scans running. Windows protection continues even when this console is stopped. The console does not start automatically with Windows.</p><div class="button-row"><a class="button" href="/api/export" download>Export JSON evidence</a><button id="print">Print / save as PDF</button><button id="quit" class="danger">Quit local console</button></div><p class="footnote">Exported reports contain local paths and network details. Store and share them accordingly. Sessions expire after eight hours; rerun the launcher to reopen.</p></article>
+  </section>
+ </main>
+ <footer><span>SENTINEL LOCAL <span class="footer-dot">/</span> Personal security console</span><span id="footer-time">Waiting for Windows evidence</span></footer>
+</div>
+<div id="toast" role="status" hidden></div>
+</body></html>
