@@ -72,6 +72,7 @@ class Antivirus:
             c.executescript('''
             CREATE TABLE IF NOT EXISTS detections(id TEXT PRIMARY KEY, job TEXT, time TEXT, path TEXT, signature TEXT, sha256 TEXT, verdict TEXT, status TEXT);
             CREATE TABLE IF NOT EXISTS vault(id TEXT PRIMARY KEY, detection TEXT, time TEXT, path TEXT, sha256 TEXT, bytes INTEGER, status TEXT, recovery TEXT);
+            CREATE TABLE IF NOT EXISTS vault_checks(id TEXT PRIMARY KEY, checked TEXT, detail TEXT);
             ''')
         self.root.mkdir(exist_ok=True)
         self.staging.mkdir(exist_ok=True)
@@ -103,7 +104,7 @@ class Antivirus:
                 'progress': self.progress, 'activeScan': self.active_scan,
                 'preExecutionBlocking': False,
                 'detections': self.store.rows('SELECT * FROM detections ORDER BY time DESC LIMIT 200'),
-                'vault': self.store.rows('SELECT * FROM vault ORDER BY time DESC LIMIT 200')}
+                'vault': self.store.rows('SELECT v.*,c.checked,c.detail AS restartDetail FROM vault v LEFT JOIN vault_checks c ON v.id=c.id ORDER BY v.time DESC LIMIT 200')}
 
     def install(self, archive=None):
         if os.name != 'nt' or os.environ.get('PROCESSOR_ARCHITECTURE', '').upper() not in ('AMD64', 'X86_64'):

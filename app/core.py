@@ -173,6 +173,9 @@ class Engine:
         self.antivirus = Antivirus(self.store)
         self.antivirus.cleanup_staging()
         self.vault = Vault(self.store)
+        self.vault.reconcile()
+        from .selftest import SelfTest
+        self.selftest = SelfTest(self.antivirus)
         self.pending_downloads = {}
         self.store.log('Console started', 'Local monitoring runs while this app is open. Defender protection runs independently.')
         if start:
@@ -229,11 +232,12 @@ class Engine:
                 'integrity': self.store.rows('SELECT * FROM integrity ORDER BY path'),
                 'settings': self.store.get('settings', {'watchDownloads': True}),
                 'antivirus': self.antivirus.status(),
+                'selfTest': {'progress': self.selftest.progress},
                 'monitor': {'lastChecked': self.last_watch, 'error': self.watch_error, 'running': not self.stop.is_set()},
                 'started': self.started, 'downloadFolder': str(Path.home() / 'Downloads'), 'dataFolder': str(self.store.folder)}
 
     def job(self, kind, raw=None, _background=False):
-        if kind not in {'quick', 'full', 'custom', 'update', 'inspect', 'av-install', 'av-update', 'av-quick', 'av-full', 'av-custom', 'av-watch'}:
+        if kind not in {'quick', 'full', 'custom', 'update', 'inspect', 'av-install', 'av-update', 'av-quick', 'av-full', 'av-custom', 'av-watch', 'av-selftest'}:
             raise ValueError('Unsupported action.')
         if kind == 'av-watch' and not _background:
             raise ValueError('Download watch scans are created only by the local monitor.')
@@ -266,7 +270,11 @@ class Engine:
         try:
             self.store.log('Started ' + kind, str(path) if path else '')
             if kind.startswith('av-'):
-                if kind == 'av-install':
+                if kind == 'av-selftest':
+                    result = self.selftest.run()
+                    state = result['status']
+                    detail = 'Harmless isolated diagnostic ' + state + f" in {result['seconds']} seconds. No malware benchmark or whole-PC safety claim."
+                elif kind == 'av-install':
                     result = self.antivirus.install()
                     state, detail = 'completed', 'Independent ClamAV engine installed. Update its signatures before scanning.'
                 elif kind == 'av-update':

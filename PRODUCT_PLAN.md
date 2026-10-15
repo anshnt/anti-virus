@@ -11,6 +11,8 @@ The target is an independent antivirus product with demonstrable protection beyo
 | Scan scope | Files, folders, priority folders and accessible fixed drives; stable snapshots are processed in batches. Skips, errors and limits remain visible. |
 | Remediation | Manual, Windows-user-encrypted quarantine tied to the exact scanned SHA-256; an exclusive file handle prevents deleting a replacement. |
 | Recovery | A recovery-verified encrypted copy precedes original removal. Recovery writes a separate `.restored` file and never overwrites or launches an original. |
+| Interrupted operations | Startup audits pending encrypted copies and interrupted recovery writes. Partial outputs are preserved, retries use a new destination and no original deletion is retried. Hardware-failure durability is not independently established. |
+| Interactive diagnostics | Test Center exercises official-signature benign scanning plus isolated synthetic plain/ZIP detection, real encryption and recovery, with a six-step live result. This is plumbing evidence, not a malware benchmark. |
 | Background operation | Post-arrival Downloads scans, integrity/startup monitoring, safe cancellation, optional per-user Windows sign-in launch. |
 | Windows coexistence | Existing Defender, firewall and tamper settings remain active. RustDesk or any other remote tool is not automatically disabled. |
 | Safety evidence | Benign regression tests, synthetic positive/archive detection, real official-database scanning, encrypted quarantine/recovery tests and HTTP access-control tests. |
@@ -21,7 +23,7 @@ The target is an independent antivirus product with demonstrable protection beyo
 2. **Driver trust:** create the vendor's signing/Hardware Dev Center process, run driver verification/compatibility checks and obtain production signatures. Driver signature enforcement must remain enabled. These are external release prerequisites; an unsigned prototype cannot be silently loaded on this PC.
 3. **Always-on protection:** a reviewed system service, least-privilege worker isolation, restart/boot recovery, secure updater, bounded queues, native notifications and a native installer/uninstaller. A per-user sign-in entry is not a tamper-resistant system service.
 4. **Broader detection:** separately tested behavioral/ransomware and fileless attack coverage, script interception, exploit coverage, rootkit/offline strategy and supported handling of WSL/virtual disks. An open port or unsigned file must never be used alone as a malware verdict.
-5. **Response completeness:** false-positive handling, audited exception policy, durable crash recovery, multiple-user quarantine isolation and robust remediation of locked/running threats without damaging Windows.
+5. **Response completeness:** false-positive handling, audited exception policy, wider power-loss/storage-corruption testing, multiple-user quarantine isolation and robust remediation of locked/running threats without damaging Windows. Interrupted user-level quarantine/recovery now has a persisted intent ledger and restart reconciliation; that does not close the broader response gate.
 6. **Release engineering:** signed installer/binaries, verified engine upgrade and rollback, SBOM/third-party licensing, update trust-key rotation, repair paths and reproducible release artifacts.
 7. **Independent assessment:** adversarial penetration testing, parser isolation and fuzzing, independent malware evaluation and a documented vulnerability response process.
 

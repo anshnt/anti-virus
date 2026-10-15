@@ -8,6 +8,7 @@ import hashlib
 import hmac
 import os
 import re
+import stat
 import uuid
 from contextlib import contextmanager
 from ctypes import wintypes
@@ -126,6 +127,70 @@ class Vault:
         self.recovery = store.folder / 'recovered'
         self.folder.mkdir(exist_ok=True)
         self.recovery.mkdir(exist_ok=True)
+        with self.store.connect() as c:
+            c.executescript('''
+            CREATE TABLE IF NOT EXISTS vault_checks(id TEXT PRIMARY KEY, checked TEXT, detail TEXT);
+            CREATE TABLE IF NOT EXISTS recovery_attempts(id TEXT PRIMARY KEY, vault TEXT, time TEXT, path TEXT, status TEXT, detail TEXT);
+            ''')
+
+    @staticmethod
+    def _regular(path, limit):
+        # Never follow a replaced vault/recovery file or a cloud placeholder.
+        for component in [*reversed(path.parents), path]:
+            info = component.lstat()
+            if getattr(info, 'st_file_attributes', 0) & (0x400 | 0x1000 | 0x40000 | 0x400000) or component.is_symlink():
+                raise ValueError('Vault links, cloud placeholders and offline files are blocked.')
+        info = path.stat()
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > limit:
+            raise ValueError('Vault item is not a supported regular file or exceeds its limit.')
+
+    def _content(self, entry):
+        encrypted = self.folder / (entry['id'] + '.dpapi')
+        self._regular(encrypted, MAX_VAULT + 1024 * 1024)
+        content = protect(encrypted.read_bytes(), decrypt=True)
+        if len(content) > MAX_VAULT or not hmac.compare_digest(hashlib.sha256(content).hexdigest(), entry['sha256']):
+            raise ValueError('Vault integrity verification failed; recovery blocked.')
+        return content
+
+    def _check(self, item_id, detail):
+        with self.store.connect() as c:
+            c.execute('INSERT OR REPLACE INTO vault_checks VALUES(?,?,?)', (item_id, now(), detail))
+
+    def reconcile(self):
+        """Single-instance startup audit. Never retry deletion or open a sample."""
+        rows = self.store.rows("SELECT * FROM vault WHERE status IN ('prepared','removal_unverified','recovering','recovery_incomplete','recovery_blocked')")
+        for entry in rows:
+            try:
+                self._content(entry)
+            except (ValueError, OSError) as exc:
+                state, detail = 'recovery_blocked', 'Encrypted recovery copy could not be verified: ' + str(exc)
+            else:
+                state = 'removal_unverified'
+                detail = 'Encrypted copy verified after restart. Original removal is unverified; no original was touched.'
+                if entry['status'] in ('recovering', 'recovery_incomplete'):
+                    state = 'recovery_incomplete'
+                    detail = 'Recovery was interrupted. Existing output was preserved; retry writes a new separate copy.'
+                    destination = Path(entry['recovery'] or '')
+                    attempts = self.store.rows('SELECT id FROM recovery_attempts WHERE vault=? AND path=?', (entry['id'], str(destination)))
+                    try:
+                        if not attempts or destination.parent != self.recovery or not re.fullmatch(r'[a-f0-9]{32}-.+\.restored', destination.name):
+                            raise ValueError('Recovery destination is not an owned attempt.')
+                        self._regular(destination, MAX_VAULT)
+                        if not hmac.compare_digest(hashlib.sha256(destination.read_bytes()).hexdigest(), entry['sha256']):
+                            raise ValueError('Recovery copy is incomplete or changed.')
+                    except (ValueError, OSError):
+                        with self.store.connect() as c:
+                            c.execute("UPDATE recovery_attempts SET status='incomplete',detail=? WHERE vault=? AND path=?", (detail, entry['id'], str(destination)))
+                    else:
+                        state, detail = 'recovered', 'Interrupted recovery completed: saved copy SHA-256 verified after restart.'
+                        with self.store.connect() as c:
+                            c.execute("UPDATE recovery_attempts SET status='verified',detail=? WHERE vault=? AND path=?", (detail, entry['id'], str(destination)))
+            with self.store.connect() as c:
+                c.execute('UPDATE vault SET status=? WHERE id=?', (state, entry['id']))
+                c.execute("UPDATE detections SET status=? WHERE id=?", ('quarantined' if state == 'recovered' else state, entry['detection']))
+            self._check(entry['id'], detail)
+            self.store.log('Vault restart audit', detail, 'review')
+        return len(rows)
 
     def quarantine(self, detection_id):
         if not isinstance(detection_id, str) or not re.fullmatch('[a-f0-9]{32}', detection_id):
@@ -166,6 +231,7 @@ class Vault:
             if prepared:
                 with self.store.connect() as c:
                     c.execute("UPDATE vault SET status='removal_unverified' WHERE id=?", (vault_id,))
+                    c.execute("UPDATE detections SET status='removal_unverified' WHERE id=?", (detection_id,))
             elif target.is_file():
                 target.unlink()
             raise
@@ -174,26 +240,37 @@ class Vault:
         if not isinstance(vault_id, str) or not re.fullmatch('[a-f0-9]{32}', vault_id):
             raise ValueError('Choose a quarantined item.')
         rows = self.store.rows('SELECT * FROM vault WHERE id=?', (vault_id,))
-        if not rows or rows[0]['status'] not in ('quarantined', 'removal_unverified', 'prepared'):
+        if not rows or rows[0]['status'] not in ('quarantined', 'removal_unverified', 'prepared', 'recovery_incomplete', 'recovery_blocked'):
             raise ValueError('This vault entry cannot be recovered again.')
         entry = rows[0]
-        encrypted = self.folder / (vault_id + '.dpapi')
-        if encrypted.stat().st_size > MAX_VAULT + 1024 * 1024:
-            raise ValueError('Vault item exceeds the recovery limit.')
-        content = protect(encrypted.read_bytes(), decrypt=True)
-        if not hmac.compare_digest(hashlib.sha256(content).hexdigest(), entry['sha256']):
-            raise ValueError('Vault integrity verification failed; recovery blocked.')
+        content = self._content(entry)
         # Never overwrite an original or silently put a detected executable back
         # into circulation. The user must review/rename this recovered copy.
         # Bound the output component even when the original is a long NTFS name.
         # The ledger retains the complete original path and content hash.
         display_name = Path(entry['path']).name[:100]
-        destination = self.recovery / (vault_id + '-' + display_name + '.restored')
-        with destination.open('xb') as output:
-            output.write(content)
-            output.flush()
-            os.fsync(output.fileno())
+        attempt = uuid.uuid4().hex
+        destination = self.recovery / (attempt + '-' + display_name + '.restored')
+        # Persist intent first. A crash after writing cannot strand an
+        # unrecorded output or force an overwrite on the next recovery attempt.
         with self.store.connect() as c:
-            c.execute("UPDATE vault SET status='recovered',recovery=? WHERE id=?", (str(destination), vault_id))
+            c.execute('INSERT INTO recovery_attempts VALUES(?,?,?,?,?,?)', (attempt, vault_id, now(), str(destination), 'writing', 'Recovery intent saved.'))
+            c.execute("UPDATE vault SET status='recovering',recovery=? WHERE id=?", (str(destination), vault_id))
+        try:
+            with destination.open('x+b') as output:
+                output.write(content)
+                output.flush()
+                os.fsync(output.fileno())
+                output.seek(0)
+                if not hmac.compare_digest(hashlib.sha256(output.read()).hexdigest(), entry['sha256']):
+                    raise ValueError('Recovered copy verification failed.')
+            with self.store.connect() as c:
+                c.execute("UPDATE vault SET status='recovered' WHERE id=?", (vault_id,))
+                c.execute("UPDATE recovery_attempts SET status='verified',detail='Written, flushed and SHA-256 verified.' WHERE id=?", (attempt,))
+        except Exception:
+            with self.store.connect() as c:
+                c.execute("UPDATE vault SET status='recovery_incomplete' WHERE id=?", (vault_id,))
+                c.execute("UPDATE recovery_attempts SET status='incomplete',detail='Output preserved; retry writes a new copy.' WHERE id=?", (attempt,))
+            raise
         self.store.log('Quarantine copy recovered', str(destination) + ' — review before opening; original location was not overwritten.', 'review')
         return str(destination)

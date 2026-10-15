@@ -1,5 +1,15 @@
 # Validation and limits
 
+## 2.1 development update: restart recovery and interactive diagnostics
+
+The complete local suite contains **88 tests**, all passing on Windows/Python 3.13 on 15 October 2026. Thirteen new tests cover forced interruption before and after source removal, written/partial/missing recovery outputs, corrupted encrypted copies, foreign recovery paths, hard links, second-client isolation, engine-verification failure, missing definitions, unexpected official findings and diagnostic isolation/cleanup. JavaScript syntax and source packaging also passed. CI results must be verified separately after pushing.
+
+The installed application's **Test Center** was run through its browser button. All six checks passed in **23.0 seconds**: three harmless files scanned with official databases (21.9 seconds; no findings/skips/errors), two expected matches against an isolated synthetic signature (plain text and ZIP), actual Windows DPAPI quarantine, exact-byte recovery, production-ledger isolation and temporary workspace cleanup. No real malware or EICAR was created, downloaded or executed. The synthetic signature never entered the production database directory. No browser errors were observed in the demonstrated flow.
+
+Recovery interruption tests inject abrupt process-loss exceptions around real file/encryption operations. They are not physical power-cut, disk-controller failure, filesystem-corruption or complete process-kill campaigns. Startup audits preserve originals and partial outputs rather than retrying deletion. Wider destructive durability testing belongs in disposable test systems.
+
+This update does not implement a privileged system service, signed kernel blocker, behavioral/ransomware protection or an independent comparison with Defender. It does not make the full antivirus product target complete.
+
 ## Independent-engine development build
 
 The expanded build adds independent ClamAV scanning, official definition updates, stable batched snapshots, post-arrival Downloads scans, cancellation, optional sign-in launch and DPAPI quarantine/recovery. Its product target and incomplete production gates are documented in [PRODUCT_PLAN.md](PRODUCT_PLAN.md).

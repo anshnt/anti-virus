@@ -9,6 +9,7 @@
   <button data-view="overview" class="active"><span>◈</span> Overview</button>
   <button data-view="antivirus"><span>◎</span> Antivirus</button>
   <button data-view="vault"><span>◇</span> Quarantine</button>
+  <button data-view="selftest"><span>✓</span> Test Center</button>
   <button data-view="scans"><span>⊞</span> Defender scans</button>
   <button data-view="files"><span>⌕</span> File Lab</button>
   <button data-view="persistence"><span>⇢</span> Persistence</button>
@@ -17,7 +18,7 @@
   <button data-view="activity"><span>≡</span> Activity</button>
   <button data-view="settings"><span>⚙</span> Settings &amp; help</button>
  </nav>
- <div class="sidebar-bottom"><span class="status-dot"></span> INDEPENDENT · LOCAL<p>ClamAV detection engine.<br>Windows protection stays active.</p><small id="version">v2.0.0-dev</small></div>
+ <div class="sidebar-bottom"><span class="status-dot"></span> INDEPENDENT · LOCAL<p>ClamAV detection engine.<br>Windows protection stays active.</p><small id="version">v2.1.0-dev</small></div>
 </aside>
 <div class="workspace">
  <header><div><span class="eyebrow">WINDOWS SECURITY CONSOLE</span><p id="device">Connecting to this PC…</p></div><div class="header-actions"><span class="local-pill">● LOCAL ONLY</span><button id="refresh" class="quiet">↻ Refresh evidence</button></div></header>
@@ -43,7 +44,14 @@
   <section id="view-vault" class="view" hidden>
    <div class="page-heading"><div><span class="eyebrow">REVERSIBLE REMEDIATION</span><h1>Encrypted quarantine</h1><p>Files moved here are encrypted for your Windows account using DPAPI.</p></div></div>
    <div class="notice">Quarantine removes the verified original only after an encrypted copy and recovery record exist. Recovery writes a separate <strong>.restored</strong> copy in the app's private recovery folder. It never overwrites an original or automatically runs a recovered file.</div>
-   <article class="panel"><div class="panel-heading"><h2>Vault items</h2><span class="tag">64 MB PER FILE</span></div><div id="vault-items"></div><p class="footnote">Installed Windows/program files, links, changed content and running/locked files are protected from this action. Review those cases through Windows Security. No automatic permanent purge is performed.</p></article>
+   <article class="panel"><div class="panel-heading"><h2>Vault items</h2><span class="tag">64 MB PER FILE</span></div><div id="vault-items"></div><p class="footnote">Interrupted quarantine and recovery are audited at restart. No original deletion is retried. Incomplete outputs remain untouched; retry creates a new copy. Installed Windows/program files, links, changed content and locked files are protected from quarantine. No automatic permanent purge is performed.</p></article>
+  </section>
+  <section id="view-selftest" class="view" hidden>
+   <div class="page-heading"><div><span class="eyebrow">PROTECTION YOU CAN INSPECT</span><h1>Test Center</h1><p>Watch the real scanner and encrypted recovery work on harmless fixtures.</p></div><button class="primary" data-job="av-selftest">Run harmless self-test</button></div>
+   <div class="diagnostic-banner"><span class="tool-icon">✓</span><div><h2>Real workflow. Harmless test data.</h2><p>Official signatures scan three clean files. An isolated test signature then matches plain text and a ZIP, followed by encrypted quarantine and byte-for-byte recovery.</p><span class="tag">LOCAL · NO MALWARE · NO FILE EXECUTION</span></div></div>
+   <div class="metrics" id="test-metrics"></div>
+   <article class="panel"><div class="panel-heading"><h2>Live diagnostic walkthrough</h2><span class="tag" id="test-state">READY</span></div><p id="test-progress" role="status">Install the engine and signatures, then run this diagnostic.</p><div id="test-steps" aria-live="polite"></div></article>
+   <div class="two-col"><article class="panel"><h2>Try a real file next</h2><p>Open Antivirus, enter a local file or folder path, and choose Scan with Sentinel. Review the scan result, skipped files and errors. A signature finding can be moved to Quarantine after a hash check.</p><button data-go="antivirus">Open Antivirus →</button></article><article class="panel"><h2>What this test proves</h2><p>It checks engine integration, archive inspection, Windows encryption and separate-copy recovery. It does not measure detection quality or prove this PC is clean. The temporary test ledger is separate from your real findings.</p><p class="footnote">Cold loading of official signatures can take tens of seconds and use several GiB of memory. Other scans wait while this diagnostic runs. Temporary test data is removed when the run ends.</p></article></div>
   </section>
   <section id="view-scans" class="view" hidden>
    <div class="page-heading"><div><span class="eyebrow">ADDITIONAL WINDOWS SCANNING</span><h1>Defender scans</h1><p>Keep access to Microsoft's engine alongside Sentinel's independent antivirus.</p></div><button class="quiet" data-job="update">↻ Update Defender signatures</button></div>

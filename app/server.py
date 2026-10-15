@@ -15,7 +15,7 @@ from .core import DATA, ROOT, Engine, now
 from . import windows
 from . import startup
 
-VERSION = '2.0.0-dev'
+VERSION = '2.1.0-dev'
 STATIC = {'/': 'index.html', '/app.css': 'app.css', '/app.js': 'app.js'}
 
 

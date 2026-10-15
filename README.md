@@ -19,6 +19,8 @@ Closing the tab leaves scans and monitors running. Use **Settings & help → Qui
 - **Signature updates:** FreshClam verifies official database updates, manually or every six hours while the app runs. Engine upgrades remain pinned source changes rather than arbitrary binary downloads.
 - **Encrypted quarantine:** manual action for engine signature detections, with a matching SHA-256, exclusive source handle, Windows DPAPI encryption, recovery verification and durable metadata before original removal. Heuristic/PUA/limit indicators cannot remove a file. Files over 64 MB, installed Windows/program files, links and changed/locked content are blocked.
 - **Recovery:** a separate private `.restored` copy; no original is overwritten or automatically opened. Recovery requires the same Windows account/key material. The vault is not a portable backup.
+- **Restart recovery:** interrupted quarantine/recovery is audited at startup. Encrypted copies are verified, completed recovery writes can be recognized by SHA-256, and incomplete outputs are preserved. Retrying recovery writes a new uniquely named copy. Original deletion is never retried at startup.
+- **Test Center:** a one-click harmless diagnostic scans three fixtures using official signatures, then uses a separate synthetic signature/ledger to test plain-text and ZIP detection, real Windows DPAPI quarantine and byte-for-byte recovery. Its six-step walkthrough stays separate from real threat history. Temporary test data is cleaned when the run ends; a forced process termination can leave a harmless temporary directory in the user's Temp folder. This is not a malware benchmark or PC safety scan.
 - **Defender scans:** additional Windows quick/full/custom scans, signature updates and recorded detections.
 - **Verified scan history:** matches scan GUIDs to Windows start/completion/cancellation events. Missing or ambiguous evidence stays unverified.
 - **Protection overview:** real-time, behavior and tamper protection, PUA settings, firewall profiles, signature age, restart flags and exclusions visibility.
@@ -32,6 +34,8 @@ Closing the tab leaves scans and monitors running. Use **Settings & help → Qui
 Change monitors run every 20 seconds while the app runs. Independent scanning copies stable content into private snapshots, batches up to 1,024 files / roughly 256 MB per engine run, and limits individual files to 256 MB. Enumeration is bounded to one million files. Skips, inaccessible files, engine limits, errors and cancellation are reported; a partial scan is not a clean result. Cold signature loading can take tens of seconds and multiple GiB of RAM. Windows evidence refreshes every four minutes; Defender event queries are bounded to 180 events from 14 days.
 
 ## Interpret the evidence
+
+To see the workflow, open **Test Center → Run harmless self-test** after engine setup. Cold loading can take tens of seconds. For your own file, use **Antivirus → File or folder → Scan with Sentinel**. Review errors/skips as well as findings. Manual quarantine is available only for an attributable signature detection; recovery is a separate `.restored` copy that is never launched.
 
 An empty detection history or completed scan cannot prove that every threat is absent. An unsigned file, changed startup entry, open port, hash-list match or script pattern is a **review indicator**, not a malware verdict. A valid signature is not a safety guarantee.
 
