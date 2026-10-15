@@ -166,6 +166,19 @@ def open_security():
     os.startfile('windowsdefender:')
 
 
+def priority_folders():
+    result = powershell("ConvertTo-Json -InputObject @([Environment]::GetFolderPath('Desktop'),[Environment]::GetFolderPath('Startup'),(Join-Path $env:USERPROFILE 'Downloads')) -Compress")
+    return [Path(p) for p in result if p and Path(p).exists()]
+
+
+def local_drives():
+    import ctypes
+    get_type = ctypes.WinDLL('kernel32', use_last_error=True).GetDriveTypeW
+    get_type.argtypes = [ctypes.c_wchar_p]
+    get_type.restype = ctypes.c_uint
+    return [Path(f'{letter}:\\') for letter in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' if get_type(f'{letter}:\\') == 3]
+
+
 def secure_data_folder(folder):
     """Restrict the app's own data directory; never accepts a web request path."""
     powershell(r'''

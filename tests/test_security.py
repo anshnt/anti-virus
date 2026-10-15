@@ -215,6 +215,29 @@ class HttpSecurityTests(unittest.TestCase):
         self.assertEqual(self.call('POST', '/api/settings', {'watchDownloads': False, 'hashes': []})[0], 200)
         self.assertFalse(self.engine.store.get('settings')['watchDownloads'])
 
+    def test_independent_policy_and_uninstalled_status(self):
+        self.login()
+        state = json.loads(self.call()[2])
+        self.assertFalse(state['antivirus']['installed'])
+        self.assertFalse(state['antivirus']['preExecutionBlocking'])
+        self.assertEqual(self.call('POST', '/api/antivirus/policy', {'scanDownloads': False, 'autoUpdate': False})[0], 200)
+        self.assertFalse(self.engine.antivirus.policy()['autoUpdate'])
+
+    def test_quarantine_cannot_accept_arbitrary_paths_or_unknown_records(self):
+        self.login()
+        self.assertEqual(self.call('POST', '/api/quarantine', {'id': '../source', 'path': 'C:\\Windows\\example'})[0], 400)
+        self.assertEqual(self.call('POST', '/api/quarantine', {'id': 'b' * 32})[0], 400)
+        self.assertEqual(self.call('POST', '/api/quarantine/recover', {'id': 'b' * 32})[0], 400)
+
+    def test_background_scan_and_invalid_cancel_not_public_actions(self):
+        self.login()
+        self.assertEqual(self.call('POST', '/api/job', {'kind': 'av-watch', 'path': ['C:\\anything']})[0], 400)
+        self.assertEqual(self.call('POST', '/api/antivirus/cancel', {})[0], 400)
+
+    def test_large_actual_body_is_rejected_without_parsing(self):
+        self.login()
+        self.assertEqual(self.call('POST', '/api/settings', {'padding': 'x' * 70000})[0], 413)
+
     def test_static_whitelist_rejects_traversal_and_database(self):
         self.login()
         for path in ('/../app/core.py', '/%2e%2e/launch.py', '/.data/sentinel.sqlite3', '/launch.py', '/app.js?x=1'):

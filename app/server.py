@@ -13,8 +13,9 @@ from urllib.parse import urlsplit
 
 from .core import DATA, ROOT, Engine, now
 from . import windows
+from . import startup
 
-VERSION = '1.0.0'
+VERSION = '2.0.0-dev'
 STATIC = {'/': 'index.html', '/app.css': 'app.css', '/app.js': 'app.js'}
 
 
@@ -60,10 +61,13 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def reply(self, status, value, content_type='application/json; charset=utf-8', extra=None):
+        if status >= 400 and self.command == 'POST' and not getattr(self, '_body_consumed', False):
+            self.discard_small_body()
         data = json.dumps(value, ensure_ascii=True).encode('utf-8') if content_type.startswith('application/json') else value
         self.send_response(status)
         self.send_header('Content-Type', content_type)
         self.send_header('Content-Length', str(len(data)))
+        self.send_header('Connection', 'close')
         self.send_header('Cache-Control', 'no-store')
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('X-Frame-Options', 'DENY')
@@ -77,6 +81,26 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(data)
         except (BrokenPipeError, ConnectionResetError):
             pass
+
+    def discard_small_body(self):
+        # A Windows close with unread request bytes can reset the connection and
+        # discard the error response. Drain only a small bounded body, with a
+        # short timeout, before rejecting; never wait for an arbitrarily large
+        # or deliberately incomplete body.
+        try:
+            length = int(self.headers.get('Content-Length', '0'))
+            if 0 < length <= 131072 and not self.headers.get('Transfer-Encoding'):
+                self.connection.settimeout(0.1)
+                while length > 0:
+                    block = self.rfile.read1(min(length, 16384))
+                    if not block:
+                        break
+                    length -= len(block)
+        except (ValueError, OSError):
+            pass
+        finally:
+            self._body_consumed = True
+            self.connection.settimeout(10)
 
     def gate(self, mutation=False):
         if self.headers.get_all('Host') != [self.server.host]:
@@ -135,6 +159,7 @@ class Handler(BaseHTTPRequestHandler):
             state = self.server.engine.status()
             state['version'] = VERSION
             state['hashes'] = self.server.engine.store.get('hashes', [])
+            state['startupLaunch'] = startup.status()
             return self.reply(200, state)
         if route == '/api/export':
             report = self.server.engine.status()
@@ -160,7 +185,9 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             return self.reply(413, {'error': 'Request body must be between 1 and 65,536 bytes.'})
         try:
-            body = json.loads(self.rfile.read(length))
+            raw = self.rfile.read(length)
+            self._body_consumed = True
+            body = json.loads(raw)
             if not isinstance(body, dict):
                 raise ValueError('A JSON object is required.')
             route = self.path
@@ -181,6 +208,23 @@ class Handler(BaseHTTPRequestHandler):
             elif route == '/api/settings':
                 engine.settings(body)
                 result = {'ok': True}
+            elif route == '/api/antivirus/policy':
+                engine.antivirus_policy(body)
+                result = {'ok': True}
+            elif route == '/api/startup':
+                if set(body) != {'enabled'}:
+                    raise ValueError('Invalid sign-in launch request.')
+                startup.configure(body['enabled'], engine.store)
+                result = {'ok': True}
+            elif route == '/api/antivirus/cancel':
+                if not engine.antivirus.active_scan:
+                    raise ValueError('No independent scan is active.')
+                engine.antivirus.cancel.set()
+                result = {'ok': True}
+            elif route == '/api/quarantine':
+                result = {'id': engine.vault_action('quarantine', body.get('id'))}
+            elif route == '/api/quarantine/recover':
+                result = {'path': engine.vault_action('recover', body.get('id'))}
             elif route == '/api/windows-security':
                 windows.open_security()
                 result = {'ok': True}

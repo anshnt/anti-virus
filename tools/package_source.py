@@ -4,7 +4,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-FILES = ['launch.py', 'Start Sentinel Local.cmd', 'README.md', 'SECURITY.md', 'CONTRIBUTING.md', 'VALIDATION.md']
+FILES = ['launch.py', 'Start Sentinel Local.cmd', 'README.md', 'SECURITY.md', 'CONTRIBUTING.md', 'VALIDATION.md', 'PRODUCT_PLAN.md']
 PATTERNS = {'app': '*.py', 'tests': '*.py', 'web': '*', 'tools': '*.py'}
 
 

@@ -1,5 +1,19 @@
 # Validation and limits
 
+## Independent-engine development build
+
+The expanded build adds independent ClamAV scanning, official definition updates, stable batched snapshots, post-arrival Downloads scans, cancellation, optional sign-in launch and DPAPI quarantine/recovery. Its product target and incomplete production gates are documented in [PRODUCT_PLAN.md](PRODUCT_PLAN.md).
+
+Live validation on 15 October 2026 installed the official ClamAV 1.5.4 x64 archive after verifying its pinned release SHA-256, updated official CVD databases through FreshClam, and scanned four benign files (including an empty file and a Unicode filename) successfully. The observed cold scan took 21.5 seconds. This tiny corpus is not a throughput or false-positive benchmark.
+
+An isolated test-only hash signature matched a harmless text marker and the same marker inside a ZIP. The detected benign fixture then exercised encrypted quarantine and separate-copy recovery. Production databases and real detection history were not modified by this synthetic test. No real malware or EICAR was downloaded, created or executed.
+
+New regressions exercise archive traversal, release digest rejection, engine file tampering, stable byte hashes, exact snapshot/result association, false filename output, scan limits/errors/cancellation, background policy, startup conflicts, DPAPI integrity, source-change races, hard links, exclusive file locks, encryption/recovery failures and crash-safe vault records. Windows malformed-request handling was hardened to drain only small bounded rejected bodies before closing, so an unread body cannot routinely discard its error response on Windows.
+
+The complete development suite now contains **72 tests**. In the real installed app, an independent scan submitted from the browser completed successfully; a separate scan was cancelled without changing its original file; and a newly created harmless Downloads file was automatically scanned by the independent background worker. Its fixture was removed after validation. Sign-in launch remained off, and pre-execution blocking remained explicitly unimplemented. These checks do not establish detection superiority.
+
+Full-PC throughput, pre-execution blocking, behavioral detection, privileged service/driver behavior and comparative malware efficacy against Defender remain unvalidated. No production-safety or superiority claim follows from these integration checks.
+
 The initial app was validated on Windows 11 with Python 3.13 on 15 October 2026. The published source includes portable launcher paths and neutral remote-access wording rather than a particular user's personal preferences.
 
 ## Automated checks

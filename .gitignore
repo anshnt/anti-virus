@@ -15,6 +15,10 @@ instance.json
 instance.tmp
 runtime-errors.log
 *.log
+*.dpapi
+*.cvd
+*.cld
+*.partial
 *.zip
 *security-report*.json
 *validation-results*.json

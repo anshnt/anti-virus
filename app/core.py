@@ -26,7 +26,7 @@ def file_path(raw, directory=False):
     if not isinstance(raw, str) or not raw.strip() or len(raw) > 240:
         raise ValueError('Enter a full local Windows path, up to 240 characters.')
     raw = raw.strip().strip('"')
-    if '\x00' in raw or raw.startswith(('\\\\', '//')) or ':' in raw[2:]:
+    if any(ord(c) < 32 for c in raw) or raw.startswith(('\\\\', '//')) or ':' in raw[2:]:
         raise ValueError('Network, device and alternate-stream paths are not supported.')
     path = Path(raw)
     if not path.is_absolute() or not re.match(r'^[A-Za-z]:[\\/]', raw):
@@ -117,7 +117,6 @@ class Store:
             CREATE TABLE IF NOT EXISTS activity(id INTEGER PRIMARY KEY, time TEXT, level TEXT, title TEXT, detail TEXT);
             CREATE TABLE IF NOT EXISTS integrity(path TEXT PRIMARY KEY, hash TEXT, lastHash TEXT, status TEXT, checked TEXT);
             ''')
-            c.execute("UPDATE jobs SET status='unverified',finished=?,detail='The app restarted before a verified result was saved. Check Defender events.' WHERE status IN ('running','queued')", (now(),))
 
     @contextmanager
     def connect(self):
@@ -153,6 +152,10 @@ class Store:
 class Engine:
     def __init__(self, folder=DATA, start=True):
         self.store = Store(folder)
+        # Recover jobs only when starting an engine, not whenever a read-only
+        # store client opens the database during installation or diagnostics.
+        with self.store.connect() as c:
+            c.execute("UPDATE jobs SET status='unverified',finished=?,detail='The app restarted before a verified result was saved. Review engine evidence.' WHERE status IN ('running','queued')", (now(),))
         self.lock = threading.Lock()
         self.scan_lock = threading.Lock()
         self.snapshot_lock = threading.Lock()
@@ -165,6 +168,11 @@ class Engine:
         self.last_watch = None
         self.watch_error = None
         self.started = now()
+        from .antivirus import Antivirus
+        from .vault import Vault
+        self.antivirus = Antivirus(self.store)
+        self.vault = Vault(self.store)
+        self.pending_downloads = {}
         self.store.log('Console started', 'Local monitoring runs while this app is open. Defender protection runs independently.')
         if start:
             threading.Thread(target=self._monitor, daemon=True).start()
@@ -219,13 +227,16 @@ class Engine:
                 'activity': self.store.rows('SELECT * FROM activity ORDER BY id DESC LIMIT 150'),
                 'integrity': self.store.rows('SELECT * FROM integrity ORDER BY path'),
                 'settings': self.store.get('settings', {'watchDownloads': True}),
+                'antivirus': self.antivirus.status(),
                 'monitor': {'lastChecked': self.last_watch, 'error': self.watch_error, 'running': not self.stop.is_set()},
                 'started': self.started, 'downloadFolder': str(Path.home() / 'Downloads'), 'dataFolder': str(self.store.folder)}
 
-    def job(self, kind, raw=None):
-        if kind not in {'quick', 'full', 'custom', 'update', 'inspect'}:
+    def job(self, kind, raw=None, _background=False):
+        if kind not in {'quick', 'full', 'custom', 'update', 'inspect', 'av-install', 'av-update', 'av-quick', 'av-full', 'av-custom', 'av-watch'}:
             raise ValueError('Unsupported action.')
-        path = file_path(raw, directory=(kind == 'custom')) if kind in {'inspect', 'custom'} else None
+        if kind == 'av-watch' and not _background:
+            raise ValueError('Download watch scans are created only by the local monitor.')
+        path = file_path(raw, directory=(kind in {'custom', 'av-custom'})) if kind in {'inspect', 'custom', 'av-custom'} else raw if kind == 'av-watch' else None
         if kind == 'inspect' and path.stat().st_size > MAX_HASH:
             raise ValueError('File exceeds 256 MB. Use a custom Defender scan instead.')
         with self.lock:
@@ -236,7 +247,7 @@ class Engine:
         job_id = uuid.uuid4().hex
         try:
             with self.store.connect() as c:
-                c.execute('INSERT INTO jobs VALUES(?,?,?,?,?,?,?)', (job_id, kind, 'running', now(), None, 'Working. Scan completion is verified using Defender events.', None))
+                c.execute('INSERT INTO jobs VALUES(?,?,?,?,?,?,?)', (job_id, kind, 'running', now(), None, 'Independent antivirus operation in progress.' if kind.startswith('av-') else 'Working. Scan completion is verified using Defender events.', None))
             threading.Thread(target=self._job, args=(job_id, kind, path), daemon=True).start()
         except Exception:
             self.scan_lock.release()
@@ -253,7 +264,26 @@ class Engine:
         result = None
         try:
             self.store.log('Started ' + kind, str(path) if path else '')
-            if kind == 'inspect':
+            if kind.startswith('av-'):
+                if kind == 'av-install':
+                    result = self.antivirus.install()
+                    state, detail = 'completed', 'Independent ClamAV engine installed. Update its signatures before scanning.'
+                elif kind == 'av-update':
+                    result = self.antivirus.update()
+                    state, detail = 'completed', 'Official independent-engine signatures updated and validated by FreshClam.'
+                else:
+                    if kind == 'av-quick':
+                        roots = windows.priority_folders()
+                    elif kind == 'av-full':
+                        roots = windows.local_drives()
+                    else:
+                        roots = path if kind == 'av-watch' else [path]
+                    if not roots:
+                        raise ValueError('No supported local scan roots were found.')
+                    result = self.antivirus.scan(job_id, roots)
+                    state = result['status']
+                    detail = f"Independent scan {state}: {result['scanned']} files scanned, {result['detected']} findings, {result['skipped']} skipped, {result['errors']} errors."
+            elif kind == 'inspect':
                 sha = digest(path)
                 result = {'path': str(path), 'bytes': path.stat().st_size, 'sha256': sha,
                           'signature': windows.signature(path), 'indicators': script_indicators(path),
@@ -318,6 +348,44 @@ class Engine:
         self.store.set('settings', {'watchDownloads': body['watchDownloads']})
         self.store.log('Settings saved', 'Download monitoring ' + ('enabled' if body['watchDownloads'] else 'disabled'))
 
+    def antivirus_policy(self, body):
+        if set(body) != {'scanDownloads', 'autoUpdate'} or not all(isinstance(v, bool) for v in body.values()):
+            raise ValueError('Invalid antivirus policy.')
+        self.store.set('antivirus_policy', body)
+        self.store.log('Independent antivirus policy saved', 'Download scans ' + ('on' if body['scanDownloads'] else 'off') + '; automatic signature updates ' + ('on' if body['autoUpdate'] else 'off'))
+
+    def vault_action(self, action, item_id):
+        with self.lock:
+            if self.stop.is_set():
+                raise ValueError('The console is stopping.')
+            if not self.scan_lock.acquire(blocking=False):
+                raise ValueError('Wait for the current scan or update before changing quarantine.')
+        try:
+            if self.stop.is_set():
+                raise ValueError('The console is stopping.')
+            return self.vault.quarantine(item_id) if action == 'quarantine' else self.vault.recover(item_id)
+        finally:
+            self.scan_lock.release()
+
+    def _antivirus_background(self):
+        status = self.antivirus.status()
+        if not status['installed'] or self.scan_lock.locked() or self.stop.is_set():
+            return
+        policy = self.antivirus.policy()
+        last_attempt = self.store.get('antivirus_update_attempt', 0)
+        if not last_attempt and status['lastUpdate']:
+            last_attempt = datetime.fromisoformat(status['lastUpdate']).timestamp()
+        if policy['autoUpdate'] and time.time() - last_attempt > 6 * 3600:
+            self.store.set('antivirus_update_attempt', time.time())
+            self.job('av-update')
+            return
+        if policy['scanDownloads'] and status['definitionsReady']:
+            ready = [p for p, changed in self.pending_downloads.items() if time.time() - changed >= 10][:32]
+            if ready:
+                self.job('av-watch', ready, _background=True)
+                for p in ready:
+                    self.pending_downloads.pop(p, None)
+
     def _monitor(self):
         tick = 0
         while not self.stop.is_set():
@@ -325,6 +393,7 @@ class Engine:
                 if self.store.get('settings', {'watchDownloads': True})['watchDownloads']:
                     self._downloads()
                 self._integrity()
+                self._antivirus_background()
                 self.last_watch = now()
                 self.watch_error = None
             except Exception as exc:
@@ -353,6 +422,11 @@ class Engine:
                     continue
                 stamp = [info.st_size, info.st_mtime_ns]
                 current[entry.name] = stamp
+                if previous is not None and previous.get(entry.name) != stamp and Path(entry.name).suffix.lower() not in {'.crdownload', '.part', '.tmp'}:
+                    if len(self.pending_downloads) < 128:
+                        self.pending_downloads[str(folder / entry.name)] = time.time()
+                    else:
+                        self.store.log('Automatic scan queue is full', 'Scan Center can scan Downloads manually. New changes are still reviewable.', 'review')
                 if previous is not None and previous.get(entry.name) != stamp and Path(entry.name).suffix.lower() in {'.exe', '.msi', '.ps1', '.bat', '.cmd', '.js', '.vbs', '.scr', '.dll', '.hta', '.lnk'}:
                     self.store.log('Executable or script arrived / changed', str(folder / entry.name) + ' — review alert, not a malware detection. Inspect or scan it in Scan Center.', 'review')
         self.store.set('downloads', current)
