@@ -21,10 +21,14 @@ def mutex_name(kind='Console'):
 
 def request_quit():
     """Ask the running console to stop safely. 0 when it is stopped, 1 while a scan or cleanup keeps it busy."""
-    if instance() is None:
+    current = instance()
+    if current is None:
         return 0
     import ctypes
     kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel.OpenProcess.restype = ctypes.c_void_p
+    kernel.WaitForSingleObject.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+    process = kernel.OpenProcess(0x00100000, False, current['pid'])  # SYNCHRONIZE
     kernel.OpenEventW.restype = ctypes.c_void_p
     kernel.OpenEventW.argtypes = [ctypes.c_uint32, ctypes.c_bool, ctypes.c_wchar_p]
     kernel.SetEvent.argtypes = [ctypes.c_void_p]
@@ -34,7 +38,8 @@ def request_quit():
     for _ in range(60):
         time.sleep(0.25)
         if instance() is None:
-            return 0
+            # Wait for the process itself to exit so an uninstaller can remove its files.
+            return 0 if not process or kernel.WaitForSingleObject(process, 15000) == 0 else 1
     return 1
 
 
@@ -81,7 +86,7 @@ def main():
         from app.startup import launch_args
         # Detached user process: scans do not depend on a transient terminal session.
         with (DATA / 'runtime-errors.log').open('ab') as errors:
-            subprocess.Popen(launch_args('--serve'), cwd=ROOT,
+            subprocess.Popen(launch_args('--serve'), cwd=DATA,
                              stdin=subprocess.DEVNULL, stdout=errors, stderr=errors,
                              creationflags=getattr(subprocess, 'DETACHED_PROCESS', 0) | getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0),
                              close_fds=True, shell=False)

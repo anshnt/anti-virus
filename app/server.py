@@ -16,7 +16,7 @@ from . import windows
 from . import startup
 from .cleaner import open_settings
 
-VERSION = '2.2.1'
+VERSION = '2.2.2'
 STATIC = {'/': 'index.html', '/app.css': 'app.css', '/app.js': 'app.js'}
 
 
