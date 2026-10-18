@@ -13,10 +13,29 @@ sys.path.insert(0, str(ROOT))
 from app.core import DATA
 
 
-def mutex_name():
+def mutex_name(kind='Console'):
     # Different users in one Windows session must not block each other's console.
     user_key = hashlib.sha256(str(Path.home()).casefold().encode('utf-8')).hexdigest()[:16]
-    return 'Local\\SentinelLocal.Console.v1.' + user_key
+    return f'Local\\SentinelLocal.{kind}.v1.' + user_key
+
+
+def request_quit():
+    """Ask the running console to stop safely. 0 when it is stopped, 1 while a scan or cleanup keeps it busy."""
+    if instance() is None:
+        return 0
+    import ctypes
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel.OpenEventW.restype = ctypes.c_void_p
+    kernel.OpenEventW.argtypes = [ctypes.c_uint32, ctypes.c_bool, ctypes.c_wchar_p]
+    kernel.SetEvent.argtypes = [ctypes.c_void_p]
+    event = kernel.OpenEventW(0x0002, False, mutex_name('Quit'))  # EVENT_MODIFY_STATE
+    if not event or not kernel.SetEvent(event):
+        return 1
+    for _ in range(60):
+        time.sleep(0.25)
+        if instance() is None:
+            return 0
+    return 1
 
 
 def instance():
@@ -38,6 +57,8 @@ def instance():
 def main():
     if os.name != 'nt' or sys.version_info < (3, 11):
         raise SystemExit('Sentinel Local requires Windows and Python 3.11 or newer.')
+    if '--quit' in sys.argv:
+        raise SystemExit(request_quit())
     if '--serve' in sys.argv:
         # One server per local user. The Windows mutex is released on process exit.
         import ctypes
@@ -47,10 +68,8 @@ def main():
         handle = kernel.CreateMutexW(None, False, mutex_name())
         if not handle or ctypes.get_last_error() == 183:
             return
-        # Fixed name so the installer can ask to close the app before replacing files.
-        running = kernel.CreateMutexW(None, False, 'SentinelLocal.Running')
         from app.server import serve
-        serve()
+        serve(mutex_name('Quit'))
         return
     current = instance()
     if current is None:

@@ -27,9 +27,9 @@ UninstallDisplayName=Sentinel Local
 WizardStyle=modern
 Compression=lzma2
 SolidCompression=yes
-; Ask to close the running console before files are replaced or removed.
-AppMutex=SentinelLocal.Running
-CloseApplications=yes
+; The console is a windowless background process: [Code] asks it to stop
+; safely (SentinelLocal.exe --quit) before files are replaced or removed.
+CloseApplications=no
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
@@ -48,3 +48,28 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 
 [Run]
 Filename: "{app}\SentinelLocal.exe"; Description: "{cm:LaunchProgram,Sentinel Local}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+function StopConsole(): Boolean;
+var
+  Exe: String;
+  Code: Integer;
+begin
+  Result := True;
+  Exe := ExpandConstant('{app}\SentinelLocal.exe');
+  if FileExists(Exe) then
+    Result := Exec(Exe, '--quit', '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  if not StopConsole() then
+    Result := 'Sentinel Local is busy with a scan or cleanup. Let it finish, then run Setup again.';
+end;
+
+function InitializeUninstall(): Boolean;
+begin
+  Result := StopConsole();
+  if not Result then
+    MsgBox('Sentinel Local is busy with a scan or cleanup. Let it finish, then uninstall again.', mbError, MB_OK);
+end;

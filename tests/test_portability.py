@@ -1,4 +1,5 @@
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -28,6 +29,39 @@ class PortableSourceTests(unittest.TestCase):
             self.assertEqual(startup.launch_args('--serve'), [r'C:\Apps\SentinelLocal.exe', '--serve'])
             self.assertEqual(startup.command(), r'C:\Apps\SentinelLocal.exe --no-browser')
         self.assertTrue(startup.launch_args('--serve')[1].endswith('launch.py'))
+
+    def test_quit_request_waits_for_running_work(self):
+        import ctypes
+        import threading
+        import uuid
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+        from app.server import quit_on_event
+        name = 'Local\SentinelLocal.Test.' + uuid.uuid4().hex
+        busy = [True]
+
+        def request_stop():
+            if busy[0]:
+                raise ValueError('A scan is running.')
+        server = SimpleNamespace(engine=SimpleNamespace(request_stop=request_stop, store=MagicMock()), shutdown=MagicMock())
+        worker = threading.Thread(target=quit_on_event, args=(server, name), daemon=True)
+        worker.start()
+        kernel = ctypes.WinDLL('kernel32')
+        kernel.OpenEventW.restype = ctypes.c_void_p
+        kernel.SetEvent.argtypes = [ctypes.c_void_p]
+        event = None
+        for _ in range(100):
+            event = event or kernel.OpenEventW(0x0002, False, name)
+            if event:
+                break
+            time.sleep(0.02)
+        kernel.SetEvent(event)
+        time.sleep(0.3)
+        server.shutdown.assert_not_called()
+        busy[0] = False
+        kernel.SetEvent(event)
+        worker.join(5)
+        server.shutdown.assert_called_once()
 
     def test_source_package_excludes_runtime_evidence(self):
         with tempfile.TemporaryDirectory() as temporary:
