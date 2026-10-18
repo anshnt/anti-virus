@@ -76,11 +76,14 @@ Capture 'network' {
  @{listeners=$listeners;connections=$connections}
 }
 Capture 'remote' {
- $s=@(Get-Service | Where-Object {$_.Name -match 'RustDesk|chromoting|Unified' -or $_.DisplayName -match 'Unified Remote'})
- $items=@($s | Select-Object Name,DisplayName,@{n='Status';e={[string]$_.Status}},@{n='StartType';e={[string]$_.StartType}})
- $u=Get-Process -Name RemoteServerWin -ErrorAction SilentlyContinue
- $run=Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue
- @{services=$items;UnifiedRemoteRunning=[bool]$u;UnifiedRemoteStartup=[bool]$run.'Unified Remote V3'}
+ $tools=[ordered]@{'AnyDesk'='AnyDesk';'TeamViewer'='TeamViewer';'RustDesk'='RustDesk';'Chrome Remote Desktop'='chromoting|remoting_host';'Splashtop'='Splashtop|SRService|SRServer';'ConnectWise ScreenConnect'='ScreenConnect';'UltraViewer'='UltraViewer';'LogMeIn'='LogMeIn|LMIGuardian';'Unified Remote'='RemoteServerWin|Unified Remote';'Supremo'='Supremo';'AeroAdmin'='AeroAdmin';'Ammyy Admin'='Ammyy';'DWService'='DWAgent';'Remote Utilities'='rutserv|rfusclient';'Quick Assist'='QuickAssist';'Parsec'='parsecd|Parsec';'Tailscale'='tailscale';'ZeroTier'='ZeroTier'}
+ $services=@(Get-Service);$processes=@(Get-Process)
+ @(foreach($name in $tools.Keys){
+  $pattern=$tools[$name]
+  $s=@($services | Where-Object {$_.Name -match $pattern -or $_.DisplayName -match $pattern})
+  $p=@($processes | Where-Object {$_.ProcessName -match $pattern})
+  if($s.Count -or $p.Count){[pscustomobject]@{Name=$name;Running=[bool]$p.Count;Services=@($s | ForEach-Object {$_.DisplayName+' ('+[string]$_.Status+', '+[string]$_.StartType+')'})}}
+ })
 }
 Capture 'securityProducts' { @(Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntivirusProduct | Select-Object displayName,productState) }
 Capture 'system' {
@@ -108,16 +111,13 @@ def snapshot():
         # Windows PowerShell can serialize AutomationNull from an empty pipeline as {}.
         return x if isinstance(x, list) else [] if x is None or x == {} else [x]
     sections = value.get('sections', {})
-    for key in ('threats', 'firewall', 'disks', 'startup', 'securityProducts'):
+    for key in ('threats', 'firewall', 'disks', 'startup', 'securityProducts', 'remote'):
         if sections.get(key, {}).get('ok'):
             sections[key]['data'] = array(sections[key].get('data'))
     network = sections.get('network', {}).get('data')
     if network:
         for key in ('listeners', 'connections'):
             network[key] = array(network.get(key))
-    remote = sections.get('remote', {}).get('data')
-    if remote:
-        remote['services'] = array(remote.get('services'))
     return value
 
 
@@ -169,6 +169,23 @@ def open_security():
 def priority_folders():
     result = powershell("ConvertTo-Json -InputObject @([Environment]::GetFolderPath('Desktop'),[Environment]::GetFolderPath('Startup'),(Join-Path $env:USERPROFILE 'Downloads')) -Compress")
     return [Path(p) for p in result if p and Path(p).exists()]
+
+
+def idle_on_power(minutes=10):
+    """True when nobody has used keyboard/mouse for `minutes` and the PC is not on battery."""
+    import ctypes
+
+    class LastInput(ctypes.Structure):
+        _fields_ = [('cbSize', ctypes.c_uint), ('dwTime', ctypes.c_uint)]
+
+    class PowerStatus(ctypes.Structure):
+        _fields_ = [('ACLineStatus', ctypes.c_ubyte), ('BatteryFlag', ctypes.c_ubyte), ('BatteryLifePercent', ctypes.c_ubyte),
+                    ('SystemStatusFlag', ctypes.c_ubyte), ('BatteryLifeTime', ctypes.c_ulong), ('BatteryFullLifeTime', ctypes.c_ulong)]
+    last, power = LastInput(ctypes.sizeof(LastInput), 0), PowerStatus()
+    if not ctypes.windll.user32.GetLastInputInfo(ctypes.byref(last)) or not ctypes.windll.kernel32.GetSystemPowerStatus(ctypes.byref(power)):
+        return False
+    idle_ms = (ctypes.windll.kernel32.GetTickCount() - last.dwTime) & 0xFFFFFFFF
+    return idle_ms >= minutes * 60000 and power.ACLineStatus != 0  # 0 = battery, 1 = AC, 255 = unknown (desktop)
 
 
 def local_drives():
