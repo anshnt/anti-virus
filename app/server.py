@@ -16,7 +16,7 @@ from . import windows
 from . import startup
 from .cleaner import open_settings
 
-VERSION = '2.2.0'
+VERSION = '2.2.1'
 STATIC = {'/': 'index.html', '/app.css': 'app.css', '/app.js': 'app.js'}
 
 
@@ -261,12 +261,34 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(500, {'error': 'The action failed. Check Windows Security or restart the app after any running scan finishes.'})
 
 
-def serve():
+def quit_on_event(server, name):
+    """Stop safely when `SentinelLocal.exe --quit` (used by the installer) signals this per-user event."""
+    import ctypes
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel.CreateEventW.restype = ctypes.c_void_p
+    kernel.CreateEventW.argtypes = [ctypes.c_void_p, ctypes.c_bool, ctypes.c_bool, ctypes.c_wchar_p]
+    kernel.WaitForSingleObject.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+    event = kernel.CreateEventW(None, False, False, name)
+    while event and kernel.WaitForSingleObject(event, 0xFFFFFFFF) == 0:
+        try:
+            server.engine.request_stop()
+        except ValueError:
+            # Never interrupt a scan, quarantine or cleanup; the caller times out and says so.
+            server.engine.store.log('Quit request deferred', 'A scan, update or cleanup is running.', 'review')
+            continue
+        server.engine.store.log('Console stopped', 'Closed for an update or uninstall. Defender protection continues independently.')
+        server.shutdown()
+        return
+
+
+def serve(quit_event=None):
     engine = Engine()
     try:
         server = LocalServer(('127.0.0.1', 8769), engine)
     except OSError:
         server = LocalServer(('127.0.0.1', 0), engine)
+    if quit_event:
+        threading.Thread(target=quit_on_event, args=(server, quit_event), daemon=True).start()
     try:
         server.serve_forever(poll_interval=0.3)
     finally:

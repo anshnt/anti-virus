@@ -8,7 +8,7 @@ A Windows antivirus **development build with an independent ClamAV engine**, off
 2. Open **Sentinel Local** from the Start menu. Your browser opens the private local console.
 3. Prefer no installer? Download **SentinelLocal-<version>-portable.zip**, extract it anywhere and run `SentinelLocal.exe`.
 
-Builds are not code-signed yet, so Windows SmartScreen may ask you to choose **More info → Run anyway**. Compare your download with `SHA256SUMS.txt` on the release page. Uninstall from Windows **Installed apps**; it closes the console, removes the sign-in launch entry and keeps `%LOCALAPPDATA%\SentinelLocal` (quarantine and history) unless you delete it yourself.
+Builds are not code-signed yet, so Windows SmartScreen may ask you to choose **More info → Run anyway**. Compare your download with `SHA256SUMS.txt` on the release page. Uninstall from Windows **Installed apps**; it stops the console safely (it waits rather than interrupting a running scan or cleanup), removes the sign-in launch entry and keeps `%LOCALAPPDATA%\SentinelLocal` (quarantine and history) unless you delete it yourself.
 
 ## Run from source
 
