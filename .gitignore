@@ -31,3 +31,7 @@ runtime-errors.log
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# Build output
+build/
+dist/

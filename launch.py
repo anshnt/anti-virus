@@ -47,6 +47,8 @@ def main():
         handle = kernel.CreateMutexW(None, False, mutex_name())
         if not handle or ctypes.get_last_error() == 183:
             return
+        # Fixed name so the installer can ask to close the app before replacing files.
+        running = kernel.CreateMutexW(None, False, 'SentinelLocal.Running')
         from app.server import serve
         serve()
         return
@@ -57,11 +59,10 @@ def main():
         from app.windows import secure_data_folder
         file_path(str(DATA), directory=True)
         secure_data_folder(DATA)
-        pythonw = Path(sys.executable).with_name('pythonw.exe')
-        executable = str(pythonw if pythonw.exists() else Path(sys.executable))
+        from app.startup import launch_args
         # Detached user process: scans do not depend on a transient terminal session.
         with (DATA / 'runtime-errors.log').open('ab') as errors:
-            subprocess.Popen([executable, str(ROOT / 'launch.py'), '--serve'], cwd=ROOT,
+            subprocess.Popen(launch_args('--serve'), cwd=ROOT,
                              stdin=subprocess.DEVNULL, stdout=errors, stderr=errors,
                              creationflags=getattr(subprocess, 'DETACHED_PROCESS', 0) | getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0),
                              close_fds=True, shell=False)
@@ -78,4 +79,13 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    if getattr(sys, 'frozen', False) and '--serve' not in sys.argv:
+        # The packaged app has no console: show launch failures in a dialog.
+        try:
+            main()
+        except Exception as exc:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(None, str(exc), 'Sentinel Local', 0x10)
+            sys.exit(1)
+    else:
+        main()

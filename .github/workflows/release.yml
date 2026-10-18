@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+      - name: Tag must match app version
+        shell: bash
+        run: |
+          version=$(python -c "import re;print(re.search(r\"^VERSION = '([^']+)'\", open('app/server.py').read(), re.M).group(1))")
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME does not match VERSION $version"; exit 1; }
+      - name: Tests
+        run: python -m unittest discover -s tests
+      - name: Install build tools
+        run: |
+          python -m pip install pyinstaller==6.22.3
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup --no-progress -y }
+      - name: Build app, installer and source package
+        run: |
+          python tools/build_exe.py --installer
+          python tools/smoke_exe.py
+          python tools/package_source.py
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd dist
+          files="SentinelLocal-Setup-*.exe SentinelLocal-*-portable.zip Sentinel-Local-source.zip"
+          sha256sum $files > SHA256SUMS.txt
+          gh release create "$GITHUB_REF_NAME" $files SHA256SUMS.txt --title "Sentinel Local ${GITHUB_REF_NAME#v}" --generate-notes \
+            --notes "Download **SentinelLocal-Setup-${GITHUB_REF_NAME#v}.exe** and run it. It installs for your Windows account only (no administrator rights) and adds a Start menu shortcut. The portable ZIP runs without installing. Builds are not code-signed yet, so Windows SmartScreen may show *More info > Run anyway*. Check downloads against SHA256SUMS.txt."
