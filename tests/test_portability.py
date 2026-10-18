@@ -22,6 +22,13 @@ class PortableSourceTests(unittest.TestCase):
                 launch.main()
         spawn.assert_not_called()
 
+    def test_packaged_exe_relaunches_itself_not_python(self):
+        from app import startup
+        with patch('app.startup.sys.frozen', True, create=True), patch('app.startup.sys.executable', r'C:\Apps\SentinelLocal.exe'):
+            self.assertEqual(startup.launch_args('--serve'), [r'C:\Apps\SentinelLocal.exe', '--serve'])
+            self.assertEqual(startup.command(), r'C:\Apps\SentinelLocal.exe --no-browser')
+        self.assertTrue(startup.launch_args('--serve')[1].endswith('launch.py'))
+
     def test_source_package_excludes_runtime_evidence(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

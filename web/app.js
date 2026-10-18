@@ -34,7 +34,7 @@ async function action(url, body, message) { try {const value=await request(url,b
 async function load(){
  if(stopped)return;
  try { state=await request('/api/state');render(); }
- catch(e){$('connection').hidden=false;$('connection').className='notice error';set('connection',e.message+' If the service is stopped or your session expired, run Start Sentinel Local.cmd.');}
+ catch(e){$('connection').hidden=false;$('connection').className='notice error';set('connection',e.message+' If the service is stopped or your session expired, reopen Sentinel Local from its shortcut.');}
 }
 function table(id, headers, rows){const target=clear(id);if(!rows.length){target.append(node('div','No entries in this snapshot.','empty'));return;}const wrap=node('div',null,'table-wrap'),t=node('table'),head=node('thead'),hr=node('tr');headers.forEach(h=>hr.append(node('th',h)));head.append(hr);const body=node('tbody');rows.forEach(values=>{const tr=node('tr');values.forEach(v=>{const td=node('td');td.append(v instanceof Node?v:document.createTextNode(String(v??'Unavailable')));tr.append(td);});body.append(tr);});t.append(head,body);wrap.append(t);target.append(wrap);}
 function field(parent, label, value, mono=false){const block=node('div',null,'detail-block');block.append(node('div',label,'detail-label'),node('div',value,'detail-value'+(mono?' mono':'')));parent.append(block);}

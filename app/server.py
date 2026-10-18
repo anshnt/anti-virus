@@ -16,7 +16,7 @@ from . import windows
 from . import startup
 from .cleaner import open_settings
 
-VERSION = '2.1.0-dev'
+VERSION = '2.2.0'
 STATIC = {'/': 'index.html', '/app.css': 'app.css', '/app.js': 'app.js'}
 
 
@@ -124,7 +124,7 @@ class Handler(BaseHTTPRequestHandler):
         except (KeyError, ValueError, CookieError):
             valid = False
         if not valid:
-            self.reply(401, {'error': 'Open the app using Start Sentinel Local.cmd to begin a local session.'})
+            self.reply(401, {'error': 'Open Sentinel Local from its shortcut (or Start Sentinel Local.cmd) to begin a local session.'})
         return valid
 
     def do_GET(self):
@@ -155,7 +155,7 @@ class Handler(BaseHTTPRequestHandler):
             content_type = {'index.html': 'text/html', 'app.js': 'text/javascript', 'app.css': 'text/css'}[name] + '; charset=utf-8'
             return self.reply(200, (ROOT / 'web' / name).read_bytes(), content_type)
         if route.startswith('/api/') and not equal_secret(self.headers.get('X-CSRF-Token', ''), self.server.csrf):
-            return self.reply(403, {'error': 'Reopen Start Sentinel Local.cmd to establish this browser tab’s private session.'})
+            return self.reply(403, {'error': 'Reopen Sentinel Local from its shortcut to establish this browser tab’s private session.'})
         if route == '/api/state':
             state = self.server.engine.status()
             state['version'] = VERSION

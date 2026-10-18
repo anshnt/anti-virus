@@ -10,10 +10,17 @@ NAME = 'Sentinel Local Antivirus'
 KEY = r'Software\Microsoft\Windows\CurrentVersion\Run'
 
 
-def command():
+def launch_args(*args):
+    """Command that runs the launcher: the packaged exe itself, or windowless Python with launch.py."""
+    if getattr(sys, 'frozen', False):
+        return [sys.executable, *args]
     executable = Path(sys.executable)
     windowless = executable.with_name('pythonw.exe')
-    return subprocess.list2cmdline([str(windowless if windowless.exists() else executable), str(ROOT / 'launch.py'), '--no-browser'])
+    return [str(windowless if windowless.exists() else executable), str(ROOT / 'launch.py'), *args]
+
+
+def command():
+    return subprocess.list2cmdline(launch_args('--no-browser'))
 
 
 def current():

@@ -2,7 +2,15 @@
 
 A Windows antivirus **development build with an independent ClamAV engine**, official signature updates, encrypted quarantine and local background scanning. Defender remains an additional Windows protection layer. The product target is a full antivirus, but this build is not yet a certified replacement and has not been shown to outperform Defender. See [the product target and release gates](PRODUCT_PLAN.md).
 
-## Run locally
+## Install on a laptop (no Python needed)
+
+1. Download **SentinelLocal-Setup-<version>.exe** from the [latest release](https://github.com/anshnt/anti-virus/releases/latest) and run it. It installs for your Windows account only (no administrator rights) under `%LOCALAPPDATA%\Programs\Sentinel Local` and adds a Start menu shortcut, optionally a desktop one.
+2. Open **Sentinel Local** from the Start menu. Your browser opens the private local console.
+3. Prefer no installer? Download **SentinelLocal-<version>-portable.zip**, extract it anywhere and run `SentinelLocal.exe`.
+
+Builds are not code-signed yet, so Windows SmartScreen may ask you to choose **More info → Run anyway**. Compare your download with `SHA256SUMS.txt` on the release page. Uninstall from Windows **Installed apps**; it closes the console, removes the sign-in launch entry and keeps `%LOCALAPPDATA%\SentinelLocal` (quarantine and history) unless you delete it yourself.
+
+## Run from source
 
 1. Install **Python 3.11 or newer** on 64-bit Intel/AMD Windows. Python 3.13 is the tested version. No third-party Python packages are needed.
 2. Clone this repository, or download and extract its source ZIP.
@@ -63,6 +71,8 @@ py -3 tools/package_source.py
 py -3 tools/setup_antivirus.py
 py -3 tools/validate_independent.py --live
 ```
+
+To build the Windows app locally: `py -3 -m pip install pyinstaller==6.22.3`, then `py -3 tools/build_exe.py` (adds the installer when [Inno Setup 6](https://jrsoftware.org/isinfo.php) is installed) and `py -3 tools/smoke_exe.py`. Pushing a `v*` tag that matches `VERSION` in `app/server.py` builds, smoke-tests and publishes the installer, portable ZIP, source ZIP and checksums as a GitHub release.
 
 Node.js is needed only for the JavaScript syntax check. `setup_antivirus.py` is an alternative to UI setup and requires the console to be stopped first; it refuses to interrupt a running instance. The opt-in live validation uses harmless files and an isolated synthetic test signature; it does not download malware or modify production databases. Windows CI runs benign regressions and syntax/package checks without downloading the engine or real malware. Source packaging excludes runtime data and vendor binaries. The downloaded runtime includes ClamAV's license files; see its upstream project for licensing.
 
