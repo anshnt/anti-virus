@@ -35,7 +35,10 @@ def main():
             assert status == 200 and b'PC Cleaner' in page, status
             status, _, script = get(port, '/app.js', cookie)
             assert status == 200 and b'renderCleaner' in script, status
-            print('Packaged app OK:', json.loads(get(port, '/health')[2])['version'])
+            version = json.loads(get(port, '/health')[2])['version']
+            # The installer stops the app this way before upgrades and uninstalls.
+            assert subprocess.run([str(EXE), '--quit'], env=env, timeout=60).returncode == 0, 'quit failed'
+            print('Packaged app OK:', version)
         finally:
             subprocess.run(['taskkill', '/PID', str(instance['pid']), '/F'], capture_output=True)
             time.sleep(1)

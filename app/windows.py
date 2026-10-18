@@ -8,6 +8,8 @@ from pathlib import Path
 
 PS = str(Path(os.environ.get('SystemRoot', r'C:\Windows')) / 'System32/WindowsPowerShell/v1.0/powershell.exe')
 FLAGS = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+# Children may outlive a quitting console; never pin the install or data folder as their working directory.
+NEUTRAL = os.environ.get('SystemRoot', r'C:\Windows')
 
 
 def powershell(script, data=None, timeout=60):
@@ -19,7 +21,7 @@ def powershell(script, data=None, timeout=60):
     env['PSModulePath'] = str(Path(PS).parent / 'Modules')
     result = subprocess.run([PS, '-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded],
                             input=json.dumps(data or {}), capture_output=True, text=True, encoding='utf-8',
-                            errors='replace', timeout=timeout, creationflags=FLAGS, shell=False, env=env)
+                            errors='replace', timeout=timeout, creationflags=FLAGS, shell=False, env=env, cwd=NEUTRAL)
     if result.returncode:
         # Do not expose script bodies or process arguments in user-facing errors.
         raise RuntimeError('Windows could not complete this check. It may require administrator access or a running Windows service.')
@@ -153,7 +155,7 @@ def run_defender(kind, path=None):
     if kind == 'custom':
         args += ['-File', str(path)]
     # Keep the server alive until this process finishes. Never use a timeout to stop a scan.
-    proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    proc = subprocess.Popen(args, cwd=NEUTRAL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             creationflags=FLAGS, shell=False)
     # Drain without storing file names or Defender diagnostic text in the activity database.
     while proc.stdout.read(4096):
