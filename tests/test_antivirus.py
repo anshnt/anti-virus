@@ -2,6 +2,7 @@ import hashlib
 import json
 import os
 import tempfile
+import time
 import unittest
 from contextlib import contextmanager
 from pathlib import Path
@@ -271,16 +272,31 @@ class BackgroundPolicyTests(unittest.TestCase):
             self.engine.job('av-watch', ['C:\\anything'])
 
     def test_policy_off_prevents_background_update(self):
-        self.engine.antivirus_policy({'scanDownloads': False, 'autoUpdate': False})
-        with patch.object(self.engine.antivirus, 'status', return_value={'installed': True, 'definitionsReady': True, 'lastUpdate': None}), patch.object(self.engine, 'job') as job:
+        self.engine.antivirus_policy({'scanDownloads': False, 'autoUpdate': False, 'weeklyScan': False})
+        with patch.object(self.engine.antivirus, 'status', return_value={'installed': True, 'definitionsReady': True, 'lastUpdate': None}), patch.object(self.engine, 'job') as job,                 patch('app.core.windows.idle_on_power', return_value=True):
             self.engine._antivirus_background()
         job.assert_not_called()
 
     def test_recent_update_not_immediately_repeated(self):
         from app.core import now
-        with patch.object(self.engine.antivirus, 'status', return_value={'installed': True, 'definitionsReady': True, 'lastUpdate': now()}), patch.object(self.engine, 'job') as job:
+        with patch.object(self.engine.antivirus, 'status', return_value={'installed': True, 'definitionsReady': True, 'lastUpdate': now()}), patch.object(self.engine, 'job') as job,                 patch('app.core.windows.idle_on_power', return_value=False):
             self.engine._antivirus_background()
         job.assert_not_called()
+
+    def test_weekly_scan_waits_for_idle_power_and_a_week(self):
+        from app.core import now
+        ready = {'installed': True, 'definitionsReady': True, 'lastUpdate': now()}
+        with patch.object(self.engine.antivirus, 'status', return_value=ready), patch.object(self.engine, 'job') as job:
+            with patch('app.core.windows.idle_on_power', return_value=False):
+                self.engine._antivirus_background()
+            job.assert_not_called()
+            with patch('app.core.windows.idle_on_power', return_value=True):
+                self.engine._antivirus_background()
+            job.assert_called_once_with('av-quick')
+            self.engine.store.set('antivirus_scheduled_scan', time.time())
+            with patch('app.core.windows.idle_on_power', return_value=True):
+                self.engine._antivirus_background()
+            job.assert_called_once()
 
     def test_due_update_is_scheduled_by_the_background_worker(self):
         with patch.object(self.engine.antivirus, 'status', return_value={'installed': True, 'definitionsReady': True, 'lastUpdate': None}), patch.object(self.engine, 'job') as job:

@@ -1,5 +1,13 @@
 # Validation and limits
 
+## 2.2: PC Cleaner, Windows app and installer
+
+The local suite contains **100 tests**, passing on Windows/Python 3.13 on 18 October 2026; CI runs it on 3.11 and 3.13. New tests cover junk cleaning age limits, empty-folder pruning, a real NTFS junction that must not be followed (inside a category and as a category root), uninstall command parsing (quoted, unquoted, MSI `/I` to `/X`, missing uninstaller), recycle requests limited to the last scan, the packaged exe relaunching itself, and the weekly scan waiting for idle/AC power.
+
+PC Cleaner analysis was run from the browser on a real Windows 11 laptop: it measured Temp, browser caches, thumbnails, crash dumps and the Recycle Bin, listed large/old files, 47 installed programs and 30 startup apps, and matched Task Manager's disabled startup entries. Analysis deletes nothing. Cleaning, recycling, uninstalling and startup toggles were not run on that laptop because they change its owner's data; their file paths are covered by tests on temporary fixtures.
+
+The PyInstaller one-folder build (PyInstaller 6.22.3) was launched locally and served the console with live Windows evidence. `tools/smoke_exe.py` checks the packaged app's health, launch link, session cookie and bundled assets; CI runs it and compiles the Inno Setup installer on every push. The installer and exe are not code-signed.
+
 ## 2.1 development update: restart recovery and interactive diagnostics
 
 The complete local suite contains **89 tests**, all passing on Windows/Python 3.13 on 15 October 2026. Fourteen new tests cover forced interruption before and after source removal, written/partial/missing recovery outputs, corrupted encrypted copies, foreign recovery paths, hard links, second-client isolation, engine-verification failure, missing definitions, unexpected official findings and diagnostic isolation/cleanup and Windows temporary-path canonicalization. JavaScript syntax and source packaging also passed. CI results must be verified separately after pushing.

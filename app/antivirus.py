@@ -89,7 +89,7 @@ class Antivirus:
                 pass
 
     def policy(self):
-        return self.store.get('antivirus_policy', {'scanDownloads': True, 'autoUpdate': True})
+        return {'scanDownloads': True, 'autoUpdate': True, 'weeklyScan': True, **self.store.get('antivirus_policy', {})}
 
     def status(self):
         installed = (self.runtime / 'runtime-manifest.json').is_file()

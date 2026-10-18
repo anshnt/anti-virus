@@ -252,6 +252,8 @@ class Engine:
             if not self.scan_lock.acquire(blocking=False):
                 raise ValueError('Another scan, update or inspection is in progress. Wait for its result.')
         job_id = uuid.uuid4().hex
+        if kind in ('av-quick', 'av-full'):
+            self.store.set('antivirus_scheduled_scan', time.time())
         try:
             with self.store.connect() as c:
                 c.execute('INSERT INTO jobs VALUES(?,?,?,?,?,?,?)', (job_id, kind, 'running', now(), None, 'Independent antivirus operation in progress.' if kind.startswith('av-') else 'Working. Scan completion is verified using Defender events.', None))
@@ -360,7 +362,7 @@ class Engine:
         self.store.log('Settings saved', 'Download monitoring ' + ('enabled' if body['watchDownloads'] else 'disabled'))
 
     def antivirus_policy(self, body):
-        if set(body) != {'scanDownloads', 'autoUpdate'} or not all(isinstance(v, bool) for v in body.values()):
+        if set(body) - {'weeklyScan'} != {'scanDownloads', 'autoUpdate'} or not all(isinstance(v, bool) for v in body.values()):
             raise ValueError('Invalid antivirus policy.')
         self.store.set('antivirus_policy', body)
         self.store.log('Independent antivirus policy saved', 'Download scans ' + ('on' if body['scanDownloads'] else 'off') + '; automatic signature updates ' + ('on' if body['autoUpdate'] else 'off'))
@@ -396,6 +398,12 @@ class Engine:
                 self.job('av-watch', ready, _background=True)
                 for p in ready:
                     self.pending_downloads.pop(p, None)
+                return
+        # Weekly quick scan, only while the laptop is idle and plugged in so it
+        # never competes with the user's work or drains the battery.
+        if policy['weeklyScan'] and status['definitionsReady'] and time.time() - self.store.get('antivirus_scheduled_scan', 0) > 7 * 86400 \
+                and windows.idle_on_power():
+            self.job('av-quick')
 
     def _monitor(self):
         tick = 0
