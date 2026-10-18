@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 from .core import DATA, ROOT, Engine, now
 from . import windows
 from . import startup
+from .cleaner import open_settings
 
 VERSION = '2.1.0-dev'
 STATIC = {'/': 'index.html', '/app.css': 'app.css', '/app.js': 'app.js'}
@@ -225,6 +226,24 @@ class Handler(BaseHTTPRequestHandler):
                 result = {'id': engine.vault_action('quarantine', body.get('id'))}
             elif route == '/api/quarantine/recover':
                 result = {'path': engine.vault_action('recover', body.get('id'))}
+            elif route == '/api/cleaner/analyze':
+                engine.cleaner.analyze()
+                result = {'ok': True}
+            elif route == '/api/cleaner/clean':
+                engine.cleaner.clean(body.get('categories'), body.get('recycleBin', False))
+                result = {'ok': True}
+            elif route == '/api/cleaner/recycle':
+                result = engine.cleaner.recycle(body.get('paths'))
+            elif route == '/api/cleaner/uninstall':
+                result = {'name': engine.cleaner.uninstall(body.get('id'))}
+            elif route == '/api/cleaner/startup':
+                result = {'name': engine.cleaner.startup(body.get('id'), body.get('enabled'))}
+            elif route == '/api/cleaner/refresh':
+                engine.cleaner.forget_inventory()
+                result = {'ok': True}
+            elif route == '/api/windows-settings':
+                open_settings(body.get('page'))
+                result = {'ok': True}
             elif route == '/api/windows-security':
                 windows.open_security()
                 result = {'ok': True}

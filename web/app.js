@@ -79,7 +79,7 @@ function render(){
  set('monitor-time',state.monitor.error||'Last change check: '+fmt(state.monitor.lastChecked));
  set('footer-time','Windows evidence · '+fmt(state.snapshot.checkedAt));set('version','v'+state.version);
  if(state.eventError){empty('recent-scans',state.eventError);empty('scan-ledger',state.eventError);}else{table('recent-scans',['When','Scope','Result','Evidence'],scanEventRows(scanEvents().slice(0,3)));table('scan-ledger',['When','Scope','Result','Evidence'],scanEventRows(scanEvents()));}
- renderJobs();renderThreats();renderFiles();renderPersistence();renderNetwork();renderIntegrity();renderActivity();renderAntivirus();renderSelfTest();
+ renderJobs();renderThreats();renderFiles();renderPersistence();renderNetwork();renderIntegrity();renderActivity();renderAntivirus();renderSelfTest();renderCleaner();
  if(!settingsLoaded){$('watch-downloads').checked=state.settings.watchDownloads;$('hashes').value=list(state.hashes).join('\n');settingsLoaded=true;}
  if(!startupLoaded&&state.startupLaunch){$('startup-enabled').checked=state.startupLaunch.enabled===true;startupLoaded=true;}
  set('startup-state',state.startupLaunch?.available?state.startupLaunch.enabled?'Enabled for this checkout, after you sign in.':'Off for this checkout. This is a user-session app, not a system service.':'Windows sign-in launch state is unavailable.');
@@ -137,6 +137,44 @@ function renderPersistence(){
 function renderNetwork(){const n=data('network');if(!n){unavailable('listeners','network');unavailable('connections','network');return;}table('listeners',['App','PID','Local address','Port','Binding scope'],list(n.listeners).map(r=>[r.Process||'Windows / unavailable',r.OwningProcess,r.LocalAddress,r.LocalPort,badge(r.Scope,r.Scope==='All interfaces'?'warn':'neutral')]));table('connections',['App','PID','Local port','Remote address','Remote port'],list(n.connections).map(r=>[r.Process||'Unavailable',r.OwningProcess,r.LocalPort,r.RemoteAddress,r.RemotePort]));}
 function renderIntegrity(){const el=clear('watched');if(!state.integrity.length){el.append(node('div','No file baselines yet. Add an important file above.','empty'));return;}state.integrity.forEach(r=>{const block=node('div',null,'integrity-item'),head=node('div',null,'row');head.append(node('strong',r.path,'mono'),badge(r.status,r.status==='unchanged'?'good':'warn'));block.append(head,node('p','Baseline: '+r.hash,'footnote mono'),node('p','Latest: '+r.lastHash,'footnote mono'),node('p','Checked '+fmt(r.checked),'footnote'));const b=node('button','Remove watch','text-button');b.addEventListener('click',()=>action('/api/integrity/remove',{path:r.path},'Watch removed. The file has not been deleted.'));block.append(b);el.append(block);});}
 function renderActivity(){if(!state)return;const el=clear('activity-list'),filter=$('activity-filter').value,items=state.activity.filter(a=>filter==='all'||a.level===filter);if(!items.length){el.append(node('div','No activity for this filter.','empty'));return;}items.forEach(a=>{const r=node('div',null,'activity-item'),copy=node('div');copy.append(node('strong',a.title),node('p',a.detail));r.append(node('span',null,'activity-marker '+a.level),node('time',fmt(a.time)),copy);el.append(r);});}
+// Lists with checkboxes are rebuilt only when their data changes, so a 5-second
+// refresh never clears the user's selection or scroll position.
+function once(id,key,build){const el=$(id);if(el.dataset.key===key)return;el.dataset.key=key;el.replaceChildren();build(el);}
+function check(value,checked=false){const box=node('input');box.type='checkbox';box.value=value;box.checked=checked;return box;}
+function subtable(el,id,headers,rows){const wrap=node('div');wrap.id=id;el.append(wrap);table(id,headers,rows);}
+function renderCleaner(){
+ const c=state.cleaner;if(!c)return;
+ const junk=list(c.junk),total=junk.reduce((s,j)=>s+j.bytes,0),bin=c.recycleBin,disk=list(data('disks')).find(d=>d.DeviceID==='C:');
+ const metrics=clear('cleaner-metrics');
+ metric(metrics,'JUNK FOUND',c.analyzed?bytes(total):'Not analyzed',c.analyzed?junk.reduce((s,j)=>s+j.files,0).toLocaleString()+' files · '+fmt(c.analyzed):'Run Analyze this PC');
+ metric(metrics,'RECYCLE BIN',bin?bytes(bin.bytes):'Unknown',bin?bin.items.toLocaleString()+' items':'Analyze to measure');
+ metric(metrics,'FREE ON C:',disk?bytes(disk.FreeSpace):'Unknown',disk?Math.round(disk.FreeSpace/disk.Size*100)+'% of '+bytes(disk.Size):'Waiting for Windows evidence');
+ metric(metrics,'LAST CLEANUP',c.last?bytes(c.last.freed)+' freed':'Never',c.last?fmt(c.last.time):'Nothing deleted yet');
+ const status=$('cleaner-status'),busy=c.busy?(c.progress||'Working')+'… Large folders can take a minute.':null;
+ status.hidden=!(busy||c.error);status.className='notice'+(c.error&&!busy?' error':'');if(busy||c.error)set('cleaner-status',busy||c.error);
+ document.querySelectorAll('#cleaner-analyze,#cleaner-form button,#cleaner-recycle').forEach(b=>b.disabled=!!c.busy);
+ once('cleaner-junk',String(c.analyzed),el=>{
+  if(!c.analyzed){el.append(node('div','Choose Analyze this PC to measure junk files. Nothing is deleted during analysis.','empty'));return;}
+  const add=(id,title,detail,size,checked)=>{const label=node('label',null,'checkbox'),text=node('span');text.append(node('strong',title),node('small',detail));label.append(check(id,checked),text,badge(size,'neutral'));el.append(label);};
+  junk.forEach(j=>add(j.id,j.title,j.detail,bytes(j.bytes)+' · '+j.files.toLocaleString()+' files',j.bytes>0));
+  if(bin)add('recycle-bin','Recycle Bin','Permanently deletes everything already in the Recycle Bin.',bytes(bin.bytes)+' · '+bin.items.toLocaleString()+' items',false);
+ });
+ once('cleaner-review',String(c.analyzed)+'|'+list(c.review).map(f=>f.path).join('|'),el=>{
+  if(!c.analyzed){el.append(node('div','Analyze this PC to list large and old files.','empty'));return;}
+  subtable(el,'cleaner-review-table',['','File','Size','Modified','Why it is listed'],list(c.review).map(f=>[check(f.path),node('span',f.path,'mono'),bytes(f.bytes),fmt(f.modified*1000),f.reason]));
+ });
+ const query=$('program-search').value.trim().toLowerCase(),sort=$('program-sort').value;
+ const programs=list(c.programs).filter(p=>!query||(p.name+' '+p.publisher).toLowerCase().includes(query)).sort((a,b)=>sort==='name'?a.name.localeCompare(b.name):sort==='installed'?(b.installed||'').localeCompare(a.installed||''):(b.bytes||0)-(a.bytes||0));
+ once('cleaner-programs',query+'|'+sort+'|'+programs.map(p=>p.id).join(),el=>subtable(el,'cleaner-programs-table',['Program','Version','Size','Installed','For',''],programs.map(p=>{
+  const name=node('div');name.append(node('strong',p.name),node('small',p.publisher||'Unknown publisher'));
+  const b=node('button','Uninstall','danger');b.disabled=!p.command;
+  b.addEventListener('click',()=>{if(confirm('Open the uninstaller for '+p.name+'?\n\nIt runs: '+p.command+'\n\nFollow its prompts to finish. Sentinel does not delete anything itself.'))action('/api/cleaner/uninstall',{id:p.id},'Uninstaller opened for '+p.name+'.');});
+  return [name,p.version||'Unknown',p.bytes?bytes(p.bytes):'Unknown',p.installed||'Unknown',p.scope,b];})));
+ once('cleaner-startup',list(c.startup).map(s=>s.id+s.enabled).join(),el=>subtable(el,'cleaner-startup-table',['App','Command','Where','Status',''],list(c.startup).map(s=>{
+  const b=node('button',s.enabled?'Disable':'Enable',s.enabled?'danger':'');
+  b.addEventListener('click',()=>action('/api/cleaner/startup',{id:s.id,enabled:!s.enabled},(s.enabled?'Disabled ':'Enabled ')+s.name+' at sign-in.'));
+  return [s.name,node('span',s.command,'mono'),s.location+(s.needsAdmin?' · admin':''),badge(s.enabled?'Enabled':'Disabled',s.enabled?'good':'neutral'),b];})));
+}
 document.querySelectorAll('[data-view],[data-go]').forEach(b=>b.addEventListener('click',()=>view(b.dataset.view||b.dataset.go)));
 window.addEventListener('hashchange',()=>view(location.hash.slice(1)));
 $('refresh').addEventListener('click',()=>action('/api/refresh',{},'Refreshing Windows evidence…'));
@@ -150,6 +188,11 @@ $('inspect-form').addEventListener('submit',e=>{e.preventDefault();action('/api/
 $('integrity-form').addEventListener('submit',async e=>{e.preventDefault();const result=await action('/api/integrity/add',{path:$('integrity-path').value},'Local baseline saved.');if(result)$('integrity-path').value='';});
 $('settings-form').addEventListener('submit',e=>{e.preventDefault();const hashes=$('hashes').value.split(/\s+/).filter(Boolean);action('/api/settings',{watchDownloads:$('watch-downloads').checked,hashes},'Settings saved.');});
 $('startup-form').addEventListener('submit',e=>{e.preventDefault();action('/api/startup',{enabled:$('startup-enabled').checked},'Windows sign-in launch saved.');});
+$('cleaner-analyze').addEventListener('click',()=>action('/api/cleaner/analyze',{},'Analyzing this PC. Nothing is deleted.'));
+$('cleaner-form').addEventListener('submit',e=>{e.preventDefault();const picked=[...$('cleaner-junk').querySelectorAll('input:checked')].map(b=>b.value),categories=picked.filter(v=>v!=='recycle-bin'),recycleBin=picked.includes('recycle-bin');if(!picked.length)return toast('Choose at least one junk category.',true);if(!confirm('Clean the selected junk now?'+(recycleBin?'\n\nThe Recycle Bin will be emptied permanently.':'')))return;action('/api/cleaner/clean',{categories,recycleBin},'Cleaning selected junk…');});
+$('cleaner-recycle').addEventListener('click',()=>{const paths=[...$('cleaner-review').querySelectorAll('input:checked')].map(b=>b.value);if(!paths.length)return toast('Select files to move first.',true);if(confirm('Move '+paths.length+' file(s) to the Recycle Bin? You can restore them from there.'))action('/api/cleaner/recycle',{paths},'Moved to the Recycle Bin.');});
+$('program-search').addEventListener('input',()=>state&&renderCleaner());$('program-sort').addEventListener('change',()=>state&&renderCleaner());
+document.querySelectorAll('[data-settings]').forEach(b=>b.addEventListener('click',()=>action('/api/windows-settings',{page:b.dataset.settings},'Opening Windows Settings.')));
 $('activity-filter').addEventListener('change',renderActivity);$('print').addEventListener('click',()=>window.print());
 document.querySelectorAll('a[href="/api/export"]').forEach(link=>link.addEventListener('click',async e=>{e.preventDefault();try{const report=await request('/api/export');const url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:'application/json'}));const download=node('a');download.href=url;download.download='Sentinel-Local-security-report.json';document.body.append(download);download.click();download.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Report exported locally.');}catch(error){toast(error.message,true);}}));
 $('quit').addEventListener('click',async()=>{if(!confirm('Stop this local console and its change monitors? Defender protection continues. You can reopen the console with the launcher.'))return;const result=await action('/api/quit',{});if(result){stopped=true;set('connection','Console stopped. Defender protection continues independently. Use the launcher to reopen.');$('connection').hidden=false;toast('Local console stopped.');}});
