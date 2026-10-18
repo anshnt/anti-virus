@@ -11,6 +11,7 @@ Use Windows and Python 3.11 or newer; Python 3.13 is the validated version. The 
 | `app/core.py` | Local store, jobs, event correlation, file inspection and monitors |
 | `app/antivirus.py` | Pinned ClamAV installation, runtime verification, CVD updates and stable batched scans |
 | `app/vault.py` | DPAPI quarantine, exclusive file identity and separate-copy recovery |
+| `app/cleaner.py` | PC Cleaner: junk categories, Recycle Bin, large/old files, uninstallers and startup apps |
 | `app/startup.py` | Optional current-user Windows sign-in launch |
 | `app/server.py` | Authenticated loopback HTTP service and explicit API actions |
 | `web/` | Dashboard, styles and safe DOM rendering |

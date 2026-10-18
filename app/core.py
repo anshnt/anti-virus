@@ -176,6 +176,8 @@ class Engine:
         self.vault.reconcile()
         from .selftest import SelfTest
         self.selftest = SelfTest(self.antivirus)
+        from .cleaner import Cleaner
+        self.cleaner = Cleaner(self.store)
         self.pending_downloads = {}
         self.store.log('Console started', 'Local monitoring runs while this app is open. Defender protection runs independently.')
         if start:
@@ -231,7 +233,7 @@ class Engine:
                 'activity': self.store.rows('SELECT * FROM activity ORDER BY id DESC LIMIT 150'),
                 'integrity': self.store.rows('SELECT * FROM integrity ORDER BY path'),
                 'settings': self.store.get('settings', {'watchDownloads': True}),
-                'antivirus': self.antivirus.status(),
+                'antivirus': self.antivirus.status(), 'cleaner': self.cleaner.status(),
                 'selfTest': {'progress': self.selftest.progress},
                 'monitor': {'lastChecked': self.last_watch, 'error': self.watch_error, 'running': not self.stop.is_set()},
                 'started': self.started, 'downloadFolder': str(Path.home() / 'Downloads'), 'dataFolder': str(self.store.folder)}
@@ -261,8 +263,8 @@ class Engine:
 
     def request_stop(self):
         with self.lock:
-            if self.scan_lock.locked():
-                raise ValueError('A scan, update or inspection is running. Let it finish before quitting. Closing this browser tab is fine.')
+            if self.scan_lock.locked() or self.cleaner.busy:
+                raise ValueError('A scan, update, inspection or cleanup is running. Let it finish before quitting. Closing this browser tab is fine.')
             self.stop.set()
 
     def _job(self, job_id, kind, path):
